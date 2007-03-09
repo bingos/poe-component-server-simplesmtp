@@ -1,0 +1,14 @@
+use inc::Module::Install;
+name 'POE-Component-Server-SimpleSMTP';
+author 'Chris Williams <chris@bingosnet.co.uk>';
+license 'perl';
+version_from 'lib/POE/Component/Server/SimpleSMTP.pm';
+requires 'Socket' => 0;
+requires 'POE' => 0.38;
+requires 'POE::Component::Pluggable' => 0.03;
+requires 'POE::Component::Client::SMTP' => 0.13;
+requires 'POE::Component::Client::DNS' => 0.99;
+requires 'Email::MessageID' => 1.35;
+requires 'Email::Simple' => 1.998;
+requires 'Email::Address' => 1.886;
+WriteAll();
