@@ -9,7 +9,6 @@ use Email::MessageID;
 use Email::Simple;
 use Email::Address;
 use Socket;
-use Data::Dumper;
 use vars qw($VERSION);
 
 $VERSION = '0.95';
@@ -42,6 +41,14 @@ sub spawn {
 
 sub session_id {
   return $_[0]->{session_id};
+}
+
+sub data_mode {
+  my $self = shift;
+  my $id = shift || return;
+  return unless $self->_conn_exists( $id );
+  $self->{clients}->{ $id }->{buffer} = [ ];
+  return 1;
 }
 
 sub _conn_exists {
@@ -145,11 +152,16 @@ sub _conn_input {
   return unless $self->_conn_exists( $id );
   $kernel->delay_adjust( $self->{clients}->{ $id }->{alarm}, $self->{time_out} || 300 );
   if ( $self->{clients}->{ $id }->{buffer} ) {
-    if ( $input eq '.' ) {
+    if ( $input eq '.' and $self->{simple} ) {
 	my $mail = delete $self->{clients}->{ $id }->{mail};
 	my $rcpt = delete $self->{clients}->{ $id }->{rcpt};
 	my $buffer = delete $self->{clients}->{ $id }->{buffer};
 	$self->_send_event( 'smtpd_message', $id, $mail, $rcpt, $buffer );
+	return;
+    }
+    elsif ( $input eq '.' ) {
+	my $buffer = delete $self->{clients}->{ $id }->{buffer};
+	$self->_send_event( 'smtpd_data', $id, $buffer );
 	return;
     }
     $input =~ s/^\.\.$/./;
@@ -408,15 +420,13 @@ sub _smtp_send_relay {
 
 sub _smtp_send_success {
   my ($kernel,$self,$item) = @_[KERNEL,OBJECT,ARG0];
-  warn $item->{uid}, " sent successfully.\n";
-  return if $self->{relay};
+  $self->send_event( 'smtpd_send_success', $item->{uid} );
   return;
 }
 
 sub _smtp_send_failure {
   my ($kernel,$self,$item) = @_[KERNEL,OBJECT,ARG0];
-  warn $item->{uid}, " failed.\n";
-  warn Dumper( $_[ARG1] );
+  $self->send_event( 'smtpd_send_failed', $item->{uid}, $_[ARG1] );
   push @{ $self->{_mail_queue} }, $item;
   return;
 }
@@ -538,8 +548,227 @@ sub SMTPD_message {
   push @{ $self->{_mail_queue} }, { uid => $uid, from => $from, rcpt => $rcpt, msg => $email->as_string };
   $poe_kernel->post( $self->{session_id}, '_process_queue' );
   $self->send_event( 'smtpd_message_queued', $id, $from, $rcpt, $uid, scalar @{ $buf } );
-  return PLUGIN_EAT_NONE;
+  return PLUGIN_EAT_ALL;
 }
 
 1;
 __END__
+
+=head1 NAME
+
+POE::Component::Server::SimpleSMTP - A simple to use POE SMTP Server.
+
+=head1 SYNOPSIS
+
+  # A simple SMTP Server 
+  use strict;
+  use POE;
+  use POE::Component::Server::SimpleSMTP;
+
+  my $hostname = 'mymailserver.local';
+  my $relay; # specify a smart 'relay' server if required
+  
+  POE::Component::Server::SimpleSMTP->spawn(
+	hostname => $hostname,
+	relay    => $relay,
+  );
+
+  $poe_kernel->run();
+  exit 0;
+
+=head1 DESCRIPTION
+
+POE::Component::Server::SimpleSMTP is a L<POE> component that provides an ease to
+use, but fully extensible SMTP mail server, that is reasonably compliant with 
+RFC 2821 L<http://www.faqs.org/rfcs/rfc2821.html>.
+
+In its simplest form it provides SMTP services, accepting mail from clients and
+either relaying the mail to a smart host for further delivery or delivering the
+mail itself by querying DNS MX records.
+
+One may also disable simple functionality and implement one's own SMTP handling 
+and mail queuing. This can be done via a POE state interface or via L<POE::Component::Pluggable> plugins.
+
+=head1 CONSTRUCTOR
+
+=over
+
+=item spawn
+
+Takes a number of optional arguments:
+
+  'alias', set an alias on the component;
+  'options', a hashref of POE::Session options;
+  'hostname', the name that the server will identify as in 'EHLO';
+  'version', change the version string reported in 220 responses;
+  'relay', specify a 'smart host' to send received mail to, default is
+	   to deliver direct after determining MX records;
+
+These optional arguments can be used to enable your own SMTP handling:
+
+  'simple', set this to a false value and the component will no 
+	    longer handle SMTP processing; 
+  'handle_connects', set this to a false value to stop the component sending
+	    220 responses on client connections;
+
+Returns a POE::Component::Server::SimpleSMTP object.
+
+=back
+
+=head1 METHODS
+
+=over
+
+=item session_id
+
+Returns the POE::Session ID of the component.
+
+=item shutdown
+
+Terminates the component. Shuts down the listener and disconnects connected clients.
+
+=item send_event
+
+Sends an event through the component's event handling system.
+
+=item send_to_client
+
+Send some output to a connected client. First parameter must be a valid client id. Second parameter is a string of text to send.
+
+=item data_mode
+
+Takes one argument a valid client ID. Switches the client connection to data mode for receiving 
+an mail message. This should be done in response to a valid DATA command from a client if
+you are doing your own SMTP handling.
+
+You will receive an 'smtpd_data' event when the client has finished sending data. See below.
+
+=back
+
+=head1 INPUT EVENTS
+
+These are events that the component will accept:
+
+=over
+
+=item register
+
+Takes N arguments: a list of event names that your session wants to listen for, minus the 'smtpd_' prefix, ( this is 
+similar to L<POE::Component::IRC> ). 
+
+Registering for 'all' will cause it to send all SMTPD-related events to you; this is the easiest way to handle it.
+
+=item unregister
+
+Takes N arguments: a list of event names which you don't want to receive. If you've previously done a 'register' for a particular event which you no longer care about, this event will tell the SMTPD to stop sending them to you. (If you haven't, it just ignores you. No big deal).
+
+=item shutdown
+
+Terminates the component. Shuts down the listener and disconnects connected clients.
+
+=item send_event
+
+Sends an event through the component's event handling system. 
+
+=item send_to_client
+
+Send some output to a connected client. First parameter must be a valid client ID. 
+Second parameter is a string of text to send.
+
+=back
+
+=head1 OUTPUT EVENTS
+
+The component sends the following events to registered sessions:
+
+=over
+
+=item smtpd_registered
+
+This event is sent to a registering session. ARG0 is POE::Component::Server::SimpleSMTP
+object.
+
+=item smtpd_listener_failed
+
+Generated if the component cannot either start a listener or there is a problem
+accepting client connections. ARG0 contains the name of the operation that failed. 
+ARG1 and ARG2 hold numeric and string values for $!, respectively.
+
+=item smtpd_connection
+
+Generated whenever a client connects to the component. ARG0 is the client ID, ARG1
+is the client's IP address, ARG2 is the client's TCP port. ARG3 is our IP address and
+ARG4 is our socket port.
+
+If 'handle_connects' is true ( which is the default ), the component will automatically
+send a 220 SMTP response to the client.
+
+=item smtpd_disconnected
+
+Generated whenever a client disconnects. ARG0 is the client ID.
+
+=item smtpd_cmd_*
+
+Generated for each SMTP command that a connected client sends to us. ARG0 is the 
+client ID. ARG1 .. ARGn are any parameters that are sent with the command. Check 
+the RFC L<http://www.faqs.org/rfcs/rfc2821.html> for details.
+
+If 'simple' is true ( which is the default ), the component deals with client
+commands itself.
+
+=item smtpd_data
+
+Generated when a client sends an email.
+
+  ARG0 will be the client ID;
+  ARG1 an arrayref of lines sent by the client, stripped of CRLF line endings;
+
+If 'simple' is true ( which is the default ), the component will deal with 
+receiving data from the client itself.
+
+=back
+
+In 'simple' mode these events will be generated:
+
+=over
+
+=item smtpd_message_queued
+
+Generated whenever a mail message is queued. 
+
+  ARG0 is the client ID;
+  ARG1 is the mail from address;
+  ARG2 is an arrayref of recipients;
+  ARG3 is the email unique idenitifer;
+  ARG4 is the number of lines of the message;
+
+=item smtpd_send_success
+
+=item smtpd_send_failed
+
+=back
+
+=head1 CAVEATS
+
+This module shouldn't be used C<as is>, as a production SMTP server, as the 
+message queue is implemented in memory. *ouch*
+
+=head1 KUDOS
+
+George Nistoric for L<POE::Component::Client::SMTP>
+
+Rocco Caputo for L<POE::Component::Client::DNS>
+
+=head1 AUTHOR
+
+Chris C<BinGOs> Williams <chris@bingosnet.co.uk>
+
+=head1 SEE ALSO
+
+L<POE::Component::Pluggable>
+
+L<POE::Component::Client::DNS>
+
+L<POE::Component::Client::SMTP>
+
+RFC 2821 L<http://www.faqs.org/rfcs/rfc2821.html>
