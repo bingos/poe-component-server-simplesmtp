@@ -532,7 +532,7 @@ sub SMTPD_message {
   my $buf = ${ $_[3] };
   my $msg_id = Email::MessageID->new;
   my $uid = $msg_id->user();
-  unshift @{ $buf }, "Received: from Unknown [" . $self->{clients}->{ $id }->{peeraddr} . "] by mail " . __PACKAGE__ . "-$VERSION with SMTP id $uid; " . strftime("%a, %d %b %Y %H:%M:%S %z", localtime); 
+  unshift @{ $buf }, "Received: from Unknown [" . $self->{clients}->{ $id }->{peeraddr} . "] by " . $self->{hostname} . " " . __PACKAGE__ . "-$VERSION with SMTP id $uid; " . strftime("%a, %d %b %Y %H:%M:%S %z", localtime); 
   $self->send_to_client( $id, "250 $uid Message accepted for delivery" );
   my $email = Email::Simple->new( join "\r\n", @{ $buf } );
   push @{ $self->{_mail_queue} }, { uid => $uid, from => $from, rcpt => $rcpt, msg => $email->as_string };
