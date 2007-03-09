@@ -5,7 +5,7 @@ use Email::Simple::Creator;
 use Data::Dumper;
 
 my $from = 'chris@bingosnet.co.uk';
-my $to = 'cwill1is@wintermute.staffordshire.gov.uk';
+my $to = 'chris.williams@staffordshire.gov.uk';
 
 my $email = Email::Simple->create(
       header => [
@@ -49,6 +49,7 @@ sub smtpd_registered {
 
 sub _default {
   my ($event, $args) = @_[ARG0 .. $#_];
+  return 0 unless $event =~ /^smtpd/;
   my @output = ( "$event: " );
 
   foreach my $arg ( @$args ) {

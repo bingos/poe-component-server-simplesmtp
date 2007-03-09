@@ -537,6 +537,7 @@ sub SMTPD_message {
   my $email = Email::Simple->new( join "\r\n", @{ $buf } );
   push @{ $self->{_mail_queue} }, { uid => $uid, from => $from, rcpt => $rcpt, msg => $email->as_string };
   $poe_kernel->post( $self->{session_id}, '_process_queue' );
+  $self->send_event( 'smtpd_message_queued', $id, $from, $rcpt, $uid, scalar @{ $buf } );
   return PLUGIN_EAT_NONE;
 }
 
