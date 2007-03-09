@@ -441,7 +441,7 @@ sub SMTPD_cmd_ehlo {
   my ($self,$smtpd) = splice @_, 0, 2;
   return PLUGIN_EAT_NONE unless $self->{simple};
   my $id = ${ $_[0] };
-  $self->send_to_client( $id, '250-' . $self->{hostname} );
+  $self->send_to_client( $id, '250 ' . $self->{hostname} . ' Hello [' . $self->{clients}->{ $id }->{peeraddr} . '], pleased to meet you' );
   return PLUGIN_EAT_ALL;
 }
 
