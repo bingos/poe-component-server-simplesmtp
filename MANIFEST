@@ -16,3 +16,6 @@ MANIFEST			This list of files
 META.yml
 README
 t/00_use.t
+t/99_pod.t
+t/99_pod_coverage.t
+t/99_test_kwalitee.t
