@@ -1,6 +1,5 @@
 Changes
 examples/simple.pl
-examples/test.pl
 inc/Module/Install.pm
 inc/Module/Install/Base.pm
 inc/Module/Install/Can.pm
@@ -16,6 +15,10 @@ MANIFEST			This list of files
 META.yml
 README
 t/00_use.t
+t/10_basic.t
+t/30_data.t
+t/40_data_fh.t
 t/99_pod.t
 t/99_pod_coverage.t
 t/99_test_kwalitee.t
+tools/svn-log.perl

@@ -10,5 +10,8 @@ requires 'POE::Component::Client::SMTP' => 0.13;
 requires 'POE::Component::Client::DNS' => 0.99;
 requires 'Email::MessageID' => 1.35;
 requires 'Email::Simple' => 1.998;
+requires 'Email::Simple::Creator' => 1.41;
 requires 'Email::Address' => 1.886;
+clean_files 'message';
+#dist_preop './tools/svn-log.perl > ./Changes';
 WriteAll();

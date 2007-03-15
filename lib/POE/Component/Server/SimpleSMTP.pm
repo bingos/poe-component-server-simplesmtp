@@ -31,7 +31,7 @@ sub spawn {
 		      send_event     => '__send_event',
 		      send_to_client => '_send_to_client',
 	            },
-	   $self => [ qw(_start register unregister _accept_client _accept_failed _conn_input _conn_error _conn_flushed _conn_alarm _send_to_client __send_event _process_queue _smtp_send_relay _smtp_send_mx _smtp_send_success _smtp_send_failure _process_dns_mx) ],
+	   $self => [ qw(_start register unregister _accept_client _accept_failed _conn_input _conn_error _conn_flushed _conn_alarm _send_to_client __send_event _process_queue _smtp_send_relay _smtp_send_mx _smtp_send_success _smtp_send_failure _process_dns_mx _fh_buffer _buffer_error _buffer_flush) ],
 	],
 	heap => $self,
 	( ref($options) eq 'HASH' ? ( options => $options ) : () ),
@@ -47,8 +47,19 @@ sub data_mode {
   my $self = shift;
   my $id = shift || return;
   return unless $self->_conn_exists( $id );
-  $self->{clients}->{ $id }->{buffer} = [ ];
+  my $handle = shift;
+  if ( $handle and $^O ne 'MSWin32' ) {
+	$poe_kernel->call( $self->{session_id}, '_fh_buffer', $id, $handle );
+  } 
+  else {
+  	$self->{clients}->{ $id }->{buffer} = [ ];
+  }
   return 1;
+}
+
+sub getsockname {
+  return unless $_[0]->{listener};
+  return $_[0]->{listener}->getsockname();
 }
 
 sub _conn_exists {
@@ -89,7 +100,7 @@ sub _start {
 
   $self->{filter} = POE::Filter::Line->new();
 
-  $self->{cmds} = [ qw(ehlo helo mail rcpt data rset expn help quit) ];
+  $self->{cmds} = [ qw(ehlo helo mail rcpt data noop vrfy rset expn help quit) ];
 
   $self->{listener} = POE::Wheel::SocketFactory->new(
       ( defined $self->{address} ? ( BindAddress => $self->{address} ) : () ),
@@ -159,13 +170,24 @@ sub _conn_input {
 	$self->_send_event( 'smtpd_message', $id, $mail, $rcpt, $buffer );
 	return;
     }
-    elsif ( $input eq '.' ) {
+    elsif ( $input eq '.' and ref( $self->{clients}->{ $id }->{buffer} ) eq 'ARRAY' ) {
 	my $buffer = delete $self->{clients}->{ $id }->{buffer};
 	$self->_send_event( 'smtpd_data', $id, $buffer );
 	return;
     }
+    elsif ( $input eq '.' ) {
+	my $wheel_id = delete $self->{clients}->{ $id }->{buffer};
+	$self->{buffers}->{ $wheel_id }->{shutdown} = 1;
+	return;
+    }
     $input =~ s/^\.\.$/./;
-    push @{ $self->{clients}->{ $id }->{buffer} }, $input;
+    if ( ref( $self->{clients}->{ $id }->{buffer} ) eq 'ARRAY' ) {
+    	push @{ $self->{clients}->{ $id }->{buffer} }, $input;
+    }
+    else {
+	my $buffer = $self->{clients}->{ $id }->{buffer};
+	$self->{buffers}->{ $buffer }->{wheel}->put( $input );
+    }
     return;
   }
   $input =~ s/^\s+//g;
@@ -216,6 +238,7 @@ sub _shutdown {
   my ($kernel,$self) = @_[KERNEL,OBJECT];
   delete $self->{listener};
   delete $self->{clients};
+  delete $self->{buffers};
   $kernel->alarm_remove_all();
   $kernel->alias_remove( $_ ) for $kernel->alias_list();
   $kernel->refcount_decrement( $self->{session_id} => __PACKAGE__ ) unless $self->{alias};
@@ -223,6 +246,34 @@ sub _shutdown {
   $self->_unregister_sessions();
   $self->{resolver}->shutdown();
   undef;
+}
+
+sub _fh_buffer {
+  my ($kernel,$self,$id,$handle) = @_[KERNEL,OBJECT,ARG0,ARG1];
+  return unless $self->_conn_exists( $id );
+  my $wheel = POE::Wheel::ReadWrite->new(
+	Handle => $handle,
+	FlushedEvent => '_buffer_flush',
+	ErrorEvent => '_buffer_error',
+  );
+  my $wheel_id = $wheel->ID();
+  $self->{clients}->{ $id }->{buffer} = $wheel_id;
+  $self->{buffers}->{ $wheel_id } = { wheel => $wheel, id => $id };
+  return;
+}
+
+sub _buffer_flush {
+  my ($self,$wheel_id) = @_[OBJECT,ARG0];
+  return unless $self->{buffers}->{ $wheel_id }->{shutdown};
+  my $data = delete $self->{buffers}->{ $wheel_id };
+  my $id = delete $data->{id};
+  $self->send_event( 'smtpd_data_fh', $id );
+  return;
+}
+
+sub _buffer_error {
+  my ($kernel,$self,$error,$wheel_id) = @_[KERNEL,OBJECT,ARG1,ARG3];
+  return;
 }
 
 sub register {
@@ -524,6 +575,22 @@ sub SMTPD_cmd_noop {
   return PLUGIN_EAT_ALL;
 }
 
+sub SMTPD_cmd_expn {
+  my ($self,$smtpd) = splice @_, 0, 2;
+  return PLUGIN_EAT_NONE unless $self->{simple};
+  my $id = ${ $_[0] };
+  $self->send_to_client( $id, '502 Command not implemented; unsupported operation (EXPN)' );
+  return PLUGIN_EAT_ALL;
+}
+
+sub SMTPD_cmd_vrfy {
+  my ($self,$smtpd) = splice @_, 0, 2;
+  return PLUGIN_EAT_NONE unless $self->{simple};
+  my $id = ${ $_[0] };
+  $self->send_to_client( $id, '252 Cannot VRFY user, but will accept message for delivery' );
+  return PLUGIN_EAT_ALL;
+}
+
 sub SMTPD_cmd_rset {
   my ($self,$smtpd) = splice @_, 0, 2;
   return PLUGIN_EAT_NONE unless $self->{simple};
@@ -598,6 +665,8 @@ and mail queuing. This can be done via a POE state interface or via L<POE::Compo
 Takes a number of optional arguments:
 
   'alias', set an alias on the component;
+  'address', bind the listening socket to a particular address;
+  'port', listen on a particular port, default is 25;
   'options', a hashref of POE::Session options;
   'hostname', the name that the server will identify as in 'EHLO';
   'version', change the version string reported in 220 responses;
@@ -642,6 +711,14 @@ an mail message. This should be done in response to a valid DATA command from a 
 you are doing your own SMTP handling.
 
 You will receive an 'smtpd_data' event when the client has finished sending data. See below.
+
+Optionally, you may supply a filehandle as a second argument. Any data received from the client 
+will be written to the filehandle. You will receive an 'smtpd_data_fh' event when the client
+has finished sending data.
+
+=item getsockname
+
+Access to the L<POE::Wheel::SocketFactory> method of the underlying listening socket.
 
 =back
 
@@ -726,6 +803,15 @@ Generated when a client sends an email.
 If 'simple' is true ( which is the default ), the component will deal with 
 receiving data from the client itself.
 
+=item smtpd_data_fh
+
+Generated when a client sends an email and a filehandle has been provided.
+
+  ARG0 will be the client ID;
+
+If 'simple' is true ( which is the default ), the component will deal with 
+receiving data from the client itself.
+
 =back
 
 In 'simple' mode these events will be generated:
@@ -748,10 +834,219 @@ Generated whenever a mail message is queued.
 
 =back
 
+=head1 PLUGINS
+
+POE::Component::Server::SimpleSMTP utilises L<POE::Component::Pluggable> to enable a
+L<POE::Component::IRC> type plugin system. 
+
+=head2 PLUGIN HANDLER TYPES
+
+There are two types of handlers that can registered for by plugins, these are 
+
+=over
+
+=item SMTPD
+
+These are the 'smtpd_' prefixed events that are generated. In a handler arguments are
+passed as scalar refs so that you may mangle the values if required.
+
+=item SMTPC
+
+These are generated whenever a response is sent to a client. Again, any 
+arguments passed are scalar refs for manglement. There is really on one type
+of this handler generated 'SMTPC_response'
+
+=back
+
+=head2 PLUGIN EXIT CODES
+
+Plugin handlers should return a particular value depending on what action they wish
+to happen to the event. These values are available as constants which you can use 
+with the following line:
+
+  use POE::Component::Server::SimpleSMTP::Constants qw(:ALL);
+
+The return values have the following significance:
+
+=over 
+
+=item SMTPD_EAT_NONE
+
+This means the event will continue to be processed by remaining plugins and
+finally, sent to interested sessions that registered for it.
+
+=item SMTP_EAT_CLIENT
+
+This means the event will continue to be processed by remaining plugins but
+it will not be sent to any sessions that registered for it. This means nothing
+will be sent out on the wire if it was an SMTPC event, beware!
+
+=item SMTPD_EAT_PLUGIN
+
+This means the event will not be processed by remaining plugins, it will go
+straight to interested sessions.
+
+=item SMTPD_EAT_ALL
+
+This means the event will be completely discarded, no plugin or session will see it. This
+means nothing will be sent out on the wire if it was an SMTPC event, beware!
+
+=back
+
+=head2 PLUGIN METHODS
+
+The following methods are available:
+
+=over
+
+=item pipeline
+
+Returns the L<POE::Component::Pluggable::Pipeline> object.
+
+=item plugin_add
+
+Accepts two arguments:
+
+  The alias for the plugin
+  The actual plugin object
+
+The alias is there for the user to refer to it, as it is possible to have multiple
+plugins of the same kind active in one POE::Component::Server::SimpleSMTP object.
+
+This method goes through the pipeline's push() method.
+
+ This method will call $plugin->plugin_register( $nntpd )
+
+Returns the number of plugins now in the pipeline if plugin was initialized, undef
+if not.
+
+=item plugin_del
+
+Accepts one argument:
+
+  The alias for the plugin or the plugin object itself
+
+This method goes through the pipeline's remove() method.
+
+This method will call $plugin->plugin_unregister( $nntpd )
+
+Returns the plugin object if the plugin was removed, undef if not.
+
+=item plugin_get
+
+Accepts one argument:
+
+  The alias for the plugin
+
+This method goes through the pipeline's get() method.
+
+Returns the plugin object if it was found, undef if not.
+
+=item plugin_list
+
+Has no arguments.
+
+Returns a hashref of plugin objects, keyed on alias, or an empty list if there are no
+plugins loaded.
+
+=item plugin_order
+
+Has no arguments.
+
+Returns an arrayref of plugin objects, in the order which they are encountered in the
+pipeline.
+
+=item plugin_register
+
+Accepts the following arguments:
+
+  The plugin object
+  The type of the hook, SMTPD or SMTPC
+  The event name(s) to watch
+
+The event names can be as many as possible, or an arrayref. They correspond
+to the prefixed events and naturally, arbitrary events too.
+
+You do not need to supply events with the prefix in front of them, just the names.
+
+It is possible to register for all events by specifying 'all' as an event.
+
+Returns 1 if everything checked out fine, undef if something's seriously wrong
+
+=item plugin_unregister
+
+Accepts the following arguments:
+
+  The plugin object
+  The type of the hook, SMTPD or SMTPC
+  The event name(s) to unwatch
+
+The event names can be as many as possible, or an arrayref. They correspond
+to the prefixed events and naturally, arbitrary events too.
+
+You do not need to supply events with the prefix in front of them, just the names.
+
+It is possible to register for all events by specifying 'all' as an event.
+
+Returns 1 if all the event name(s) was unregistered, undef if some was not found.
+
+=back
+
+=head2 PLUGIN TEMPLATE
+
+The basic anatomy of a plugin is:
+
+        package Plugin;
+
+        # Import the constants, of course you could provide your own 
+        # constants as long as they map correctly.
+        use POE::Component::Server::SimpleSMTP::Constants qw( :ALL );
+
+        # Our constructor
+        sub new {
+                ...
+        }
+
+        # Required entry point for plugins
+        sub plugin_register {
+                my( $self, $smtpd ) = @_;
+
+                # Register events we are interested in
+                $smtpd->plugin_register( $self, 'SMTPD', qw(all) );
+
+                # Return success
+                return 1;
+        }
+
+        # Required exit point for pluggable
+        sub plugin_unregister {
+                my( $self, $smtpd ) = @_;
+
+                # Pluggable will automatically unregister events for the plugin
+
+                # Do some cleanup...
+
+                # Return success
+                return 1;
+        }
+
+        sub _default {
+                my( $self, $smtpd, $event ) = splice @_, 0, 3;
+
+                print "Default called for $event\n";
+
+                # Return an exit code
+                return SMTPD_EAT_NONE;
+        }
+
 =head1 CAVEATS
 
 This module shouldn't be used C<as is>, as a production SMTP server, as the 
 message queue is implemented in memory. *ouch*
+
+=head1 TODO
+
+Design a better message queue so that messages are stored on disk.
 
 =head1 KUDOS
 
