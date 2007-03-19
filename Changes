@@ -1,0 +1,73 @@
+========================
+2007-03-19 12:10:58 0.96
+========================
+
+  2007-03-19 10:26:30 (r11) by bingos
+  tools/svn-log.perl M; Makefile.PL M;
+  lib/POE/Component/Server/SimpleSMTP.pm M
+
+    Improved mail queue. Drop messages with 5xx send errors. Implemented
+    4 day timeout on resends. 
+
+========================
+2007-03-15 16:56:30 0.95
+========================
+
+  2007-03-15 16:53:30 (r9) by bingos
+  README M; t/40_data_fh.t A; tools A; t/30_data.t A; MANIFEST M;
+  t/10_basic.t A; tools/svn-log.perl A; examples/test.pl D; Makefile.PL
+  M; lib/POE/Component/Server/SimpleSMTP.pm M
+
+    Added more tests, more methods and more documentation. MORE! 
+
+  2007-03-11 18:38:43 (r8) by bingos
+  t/99_pod_coverage.t A; MANIFEST M; t/99_pod.t A; t/99_test_kwalitee.t A
+
+    Added POD and Kwalitee tests. 
+
+  2007-03-09 18:05:19 (r7) by bingos
+  lib/POE/Component/Server/SimpleSMTP.pm M
+
+    Reworked DATA cmd detection and added documentation. 
+
+  2007-03-09 13:59:16 (r6) by bingos
+  lib/POE/Component/Server/SimpleSMTP.pm M
+
+    Cosmetic fix to 'Received from:' header generation. 
+
+  2007-03-09 13:07:19 (r5) by bingos
+  lib/POE/Component/Server/SimpleSMTP.pm M
+
+    Fixed EHLO 250 response to actually follow the RFC. 
+
+  2007-03-09 11:57:59 (r4) by bingos
+  examples/test.pl M; lib/POE/Component/Server/SimpleSMTP.pm M
+
+    Added new state 'smtpd_message_queued' 
+
+  2007-03-09 10:59:17 (r3) by bingos; META.yml D
+
+    Removed META file 
+
+  2007-03-09 10:57:20 (r2) by bingos; inc D
+
+    Removed inc/ folder. 
+
+  2007-03-09 10:45:32 (r1) by svn
+  README A; lib/POE/Component/Server/SimpleSMTP A; inc/Module A;
+  inc/Module/Install/Metadata.pm A; /trunk A; t/00_use.t A;
+  lib/POE/Component/Server A; inc/Module/Install/WriteAll.pm A; t A;
+  inc/Module/Install A; MANIFEST A; lib A; examples/test.pl A;
+  inc/Module/Install/Fetch.pm A; Changes A; inc A;
+  lib/POE/Component/Server/SimpleSMTP.pm A; examples A;
+  inc/Module/Install.pm A; inc/Module/Install/Can.pm A;
+  inc/Module/Install/Win32.pm A; examples/simple.pl A; /branches A;
+  lib/POE/Component/Server/SimpleSMTP/Constants.pm A; META.yml A;
+  Makefile.PL A; lib/POE A; inc/Module/Install/Base.pm A;
+  lib/POE/Component A; /tags A; inc/Module/Install/Makefile.pm A
+
+    Initial repository layout
+
+==============
+End of Excerpt
+==============
