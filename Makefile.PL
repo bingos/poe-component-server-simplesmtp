@@ -13,5 +13,4 @@ requires 'Email::Simple' => 1.998;
 requires 'Email::Simple::Creator' => 1.41;
 requires 'Email::Address' => 1.886;
 clean_files 'message';
-#dist_preop './tools/svn-log.perl > ./Changes';
 WriteAll();

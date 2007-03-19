@@ -11,7 +11,7 @@ use Email::Address;
 use Socket;
 use vars qw($VERSION);
 
-$VERSION = '0.95';
+$VERSION = '0.96';
 
 sub spawn {
   my $package = shift;
@@ -98,7 +98,7 @@ sub _start {
     $kernel->post( $sender, 'smtpd_registered', $self );
   }
 
-  $self->{filter} = POE::Filter::Line->new();
+  $self->{filter} = POE::Filter::Line->new( Literal => "\015\012" );
 
   $self->{cmds} = [ qw(ehlo helo mail rcpt data noop vrfy rset expn help quit) ];
 
@@ -407,14 +407,18 @@ sub _process_queue {
     $kernel->yield( '_smtp_send_relay', $item );
     return;
   }
+  my %domains;
   foreach my $recipient ( @{ $item->{rcpt} } ) {
+	my $host = Email::Address->new(undef,$recipient,undef)->host();
+	push @{ $domains{ $host } }, $recipient;
+  }
+  foreach my $domain ( keys %domains ) {
     my $copy = { %{ $item } };
-    $copy->{rcpt} = [ $recipient ];
-    my $host = Email::Address->new(undef,$recipient,undef)->host();
+    $copy->{rcpt} = $domains{ $domain };
     my $response = $self->{resolver}->resolve(
 	event   => '_process_dns_mx',
 	type    => 'MX',
-	host    => $host,
+	host    => $domain,
 	context => $copy,
     );
     $kernel->yield( '_process_dns_mx', $response ) if $response;
@@ -476,8 +480,14 @@ sub _smtp_send_success {
 }
 
 sub _smtp_send_failure {
-  my ($kernel,$self,$item) = @_[KERNEL,OBJECT,ARG0];
-  $self->send_event( 'smtpd_send_failed', $item->{uid}, $_[ARG1] );
+  my ($kernel,$self,$item,$error) = @_[KERNEL,OBJECT,ARG0,ARG1];
+  $self->send_event( 'smtpd_send_failed', $item->{uid}, $error );
+  if ( $error->{SMTP_Server_Error} and $error->{SMTP_Server_Error} =~ /^5/ ) {
+	return;
+  }
+  if ( time() - $item->{ts} > 345600 ) {
+	return;
+  }
   push @{ $self->{_mail_queue} }, $item;
   return;
 }
@@ -612,7 +622,7 @@ sub SMTPD_message {
   unshift @{ $buf }, "Received: from Unknown [" . $self->{clients}->{ $id }->{peeraddr} . "] by " . $self->{hostname} . " " . __PACKAGE__ . "-$VERSION with SMTP id $uid; " . strftime("%a, %d %b %Y %H:%M:%S %z", localtime); 
   $self->send_to_client( $id, "250 $uid Message accepted for delivery" );
   my $email = Email::Simple->new( join "\r\n", @{ $buf } );
-  push @{ $self->{_mail_queue} }, { uid => $uid, from => $from, rcpt => $rcpt, msg => $email->as_string };
+  push @{ $self->{_mail_queue} }, { uid => $uid, from => $from, rcpt => $rcpt, msg => $email->as_string, ts => time() };
   $poe_kernel->post( $self->{session_id}, '_process_queue' );
   $self->send_event( 'smtpd_message_queued', $id, $from, $rcpt, $uid, scalar @{ $buf } );
   return PLUGIN_EAT_ALL;
