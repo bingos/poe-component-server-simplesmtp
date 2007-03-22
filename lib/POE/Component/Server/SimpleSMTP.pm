@@ -11,7 +11,7 @@ use Email::Address;
 use Socket;
 use vars qw($VERSION);
 
-$VERSION = '0.97';
+$VERSION = '0.98';
 
 sub spawn {
   my $package = shift;
