@@ -11,7 +11,7 @@ use Email::Address;
 use Socket;
 use vars qw($VERSION);
 
-$VERSION = '0.96';
+$VERSION = '0.97';
 
 sub spawn {
   my $package = shift;
@@ -450,6 +450,7 @@ sub _smtp_send_mx {
 	Body => $item->{msg},
 	Server => $exchange,
 	Context => $item,
+	Timeout => $self->{time_out} || 300,
 	MyHostname => $self->{hostname},
 	SMTP_Success => '_smtp_send_success',
 	SMTP_Failure => '_smtp_send_failure',
@@ -466,6 +467,7 @@ sub _smtp_send_relay {
 	Body => $item->{msg},
 	Server => $self->{relay},
 	Context => $item,
+	Timeout => $self->{time_out} || 300,
 	MyHostname => $self->{hostname},
 	SMTP_Success => '_smtp_send_success',
 	SMTP_Failure => '_smtp_send_failure',
