@@ -1,4 +1,27 @@
 ========================
+2007-03-22 09:51:26 0.98
+========================
+
+  2007-03-22 09:51:00 (r16) by bingos
+  lib/POE/Component/Server/SimpleSMTP.pm M
+
+    F**k, forgot to update Changes file 
+
+========================
+2007-03-22 09:46:31 0.97
+========================
+
+  2007-03-22 09:45:26 (r14) by bingos
+  MANIFEST M; lib/POE/Component/Server/SimpleSMTP.pm M; t/20_timeout.t A
+
+    Fixed time out issues with poco-client-smtp: it defaults to 30
+    seconds, which is just not long enough. Set to 5 minutes as per RFC. 
+
+  2007-03-19 12:18:22 (r13) by bingos; tools/svn-log.perl M; Changes M
+
+    svn-log.perl script had mysteriously disappeared. 
+
+========================
 2007-03-19 12:10:58 0.96
 ========================
 

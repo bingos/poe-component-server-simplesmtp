@@ -11,7 +11,7 @@ use Email::Address;
 use Socket;
 use vars qw($VERSION);
 
-$VERSION = '0.98';
+$VERSION = '0.99';
 
 sub spawn {
   my $package = shift;
@@ -842,7 +842,17 @@ Generated whenever a mail message is queued.
 
 =item smtpd_send_success
 
+Generated whenever a mail message is successfully delivered.
+
+  ARG0 is the email unique identifier;
+
 =item smtpd_send_failed
+
+Generated whenever a mail message is unsuccessfully delivered. This can be for a variety of reasons. The poco
+will attempt to resend the message on non-fatal errors ( such as an explicit denial of delivery by the SMTP peer ), for up to 4 days.
+
+  ARG0 is the email unique identifier;
+  ARG1 is a hashref as returned by POE::Component::Client::SMTP via 'SMTP_Failure'
 
 =back
 
