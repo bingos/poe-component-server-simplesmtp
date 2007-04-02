@@ -1,4 +1,13 @@
 ========================
+2007-03-28 07:55:52 1.00
+========================
+
+  2007-03-28 07:55:21 (r20) by bingos
+  Changes M; lib/POE/Component/Server/SimpleSMTP.pm M
+
+    Set Message-ID header on received emails when in Simple Mode. 
+
+========================
 2007-03-25 11:15:02 0.99
 ========================
 

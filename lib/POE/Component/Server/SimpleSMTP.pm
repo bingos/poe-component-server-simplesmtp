@@ -8,16 +8,20 @@ use POE::Component::Pluggable::Constants qw(:ALL);
 use Email::MessageID;
 use Email::Simple;
 use Email::Address;
+use Carp;
 use Socket;
+use Storable;
 use vars qw($VERSION);
 
-$VERSION = '1.00';
+$VERSION = '1.01';
 
 sub spawn {
   my $package = shift;
   my %opts = @_;
   $opts{lc $_} = delete $opts{$_} for keys %opts;
   my $options = delete $opts{options};
+  _massage_handlers( $opts{handlers} ) if $opts{handlers};
+  $opts{handlers} = [ ] unless $opts{handlers};
   $opts{simple} = 1 unless defined $opts{simple} and !$opts{simple};
   $opts{handle_connects} = 1 unless defined $opts{handle_connects} and !$opts{handle_connects};
   $opts{hostname} = 'localhost' unless defined $opts{hostname};
@@ -62,6 +66,21 @@ sub getsockname {
   return $_[0]->{listener}->getsockname();
 }
 
+sub get_handlers {
+  my $self = shift;
+  my $handlers = Storable::dclone( $self->{handlers} );
+  delete $_->{RE} for @{ $handlers };
+  return $handlers;
+}
+
+sub set_handlers {
+  my $self = shift;
+  my $handlers = shift || return;
+  _massage_handlers( $handlers );
+  $self->{handlers} = $handlers;
+  return 1;
+}
+
 sub _conn_exists {
   my ($self,$wheel_id) = @_;
   return 0 unless $wheel_id and defined $self->{clients}->{ $wheel_id };
@@ -73,6 +92,40 @@ sub _valid_cmd {
   my $cmd = shift || return;
   $cmd = lc $cmd;
   return 0 unless grep { $_ eq $cmd } @{ $self->{cmds} };
+  return 1;
+}
+
+sub _massage_handlers {
+  my $handler = shift || return;
+  croak( "HANDLERS is not a ref to an array!" ) 
+	unless ref $handler and ref $handler eq 'ARRAY';
+  my $count = 0;
+  while ( $count < scalar( @$handler ) ) {
+     if ( ref $handler->[ $count ] and ref( $handler->[ $count ] ) eq 'HASH' ) {
+	$handler->[ $count ]->{ uc $_ } = delete $handler->[ $count ]->{ $_ } 
+	    for keys %{ $handler->[ $count ] };
+	croak( "HANDLER number $count does not have a SESSION argument!" )
+		unless $handler->[ $count ]->{'SESSION'};
+	croak( "HANDLER number $count does not have an EVENT argument!" )
+		unless $handler->[ $count ]->{'EVENT'};
+	croak( "HANDLER number $count does not have a MATCH argument!" )
+		unless $handler->[ $count ]->{'MATCH'};
+	$handler->[ $count ]->{'SESSION'} = $handler->[ $count ]->{'SESSION'}->ID()
+		if UNIVERSAL::isa( $handler->[ $count ]->{'SESSION'}, 'POE::Session' );
+	my $regex;
+	eval { $regex = qr/$handler->[ $count ]->{'MATCH'}/ };
+	if ( $@ ) {
+		croak( "HANDLER number $count has a malformed MATCH -> $@" );
+	}
+	else {
+		$handler->[ $count ]->{'RE'} = $regex;
+	}
+     }
+     else {
+	croak( "HANDLER number $count is not a reference to a HASH!" );
+     }
+     $count++;
+  }
   return 1;
 }
 
@@ -397,6 +450,15 @@ sub _send_to_client {
   return 1;
 }
 
+sub _check_recipient {
+  my $self = shift;
+  my $recipient = shift || return;
+  foreach my $handler ( @{ $self->{handlers} } ) {
+	return $handler if $recipient =~ $handler->{RE};
+  }
+  return;
+}
+
 sub _process_queue {
   my ($kernel,$self) = @_[KERNEL,OBJECT];
   my $item = shift @{ $self->{_mail_queue} };
@@ -409,6 +471,10 @@ sub _process_queue {
   }
   my %domains;
   foreach my $recipient ( @{ $item->{rcpt} } ) {
+	if ( my $handler = $self->_check_recipient( $recipient ) ) {
+	   $kernel->post( $handler->{'SESSION'}, $handler->{'EVENT'}, $item );
+	   next;
+	}
 	my $host = Email::Address->new(undef,$recipient,undef)->host();
 	push @{ $domains{ $host } }, $recipient;
   }
@@ -693,6 +759,18 @@ These optional arguments can be used to enable your own SMTP handling:
   'handle_connects', set this to a false value to stop the component sending
 	    220 responses on client connections;
 
+In simple mode one may also specify recipient handlers. These are regular expressions 
+that are applied to each recipient of a recieved email. If a recipient matches the
+handler, it is removed from the process queue and dispatched instead to indicated session/event combo.
+
+  'handlers', an arrayref containing hashrefs. Each hashref should contain the keys:
+
+	'match', a regexp to apply;
+	'session', The session to send the email to;
+	'event', The event to trigger;
+
+See OUTPUT EVENTS below for information on what a handler event contains.
+
 Returns a POE::Component::Server::SimpleSMTP object.
 
 =back
@@ -732,6 +810,14 @@ has finished sending data.
 =item getsockname
 
 Access to the L<POE::Wheel::SocketFactory> method of the underlying listening socket.
+
+=item get_handlers
+
+Returns an arrayref of the current handlers.
+
+=item set_handlers
+
+Accepts an arrayref of handler hashrefs ( see spawn() for details ).
 
 =back
 
@@ -856,6 +942,15 @@ will attempt to resend the message on non-fatal errors ( such as an explicit den
   ARG1 is a hashref as returned by POE::Component::Client::SMTP via 'SMTP_Failure'
 
 =back
+
+Handler events are generated whenever a recipient matches a given regexp. ARG0 will 
+contain a hashref representing the email item with the following keys:
+
+  'uid', the Message-ID;
+  'from', the email address of the sender;
+  'rcpt', an arrayref of the email recipients;
+  'msg', string representation of the email headers and body;
+  'ts', the unix time representation of the time the email was received;
 
 =head1 PLUGINS
 
