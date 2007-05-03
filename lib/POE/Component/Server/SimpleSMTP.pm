@@ -13,7 +13,7 @@ use Socket;
 use Storable;
 use vars qw($VERSION);
 
-$VERSION = '1.01';
+$VERSION = '1.02';
 
 sub spawn {
   my $package = shift;
@@ -494,8 +494,15 @@ sub _process_queue {
 
 sub _process_dns_mx {
   my ($kernel,$self,$response) = @_[KERNEL,OBJECT,ARG0];
-  my @answers = $response->{response}->answer();
   my $item = $response->{context};
+  unless ( $response->{response} ) {
+     if ( time() - $item->{ts} > 345600 ) {
+	return;
+     }
+     push @{ $self->{_mail_queue} }, $item;
+     return;
+  }
+  my @answers = $response->{response}->answer();
   my %mx = map { ( $_->exchange(), $_->preference() ) } 
 	   grep { $_->type() eq 'MX' } @answers;
   my @mx = sort { $mx{$a} <=> $mx{$b} } keys %mx;
