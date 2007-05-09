@@ -13,7 +13,7 @@ use Socket;
 use Storable;
 use vars qw($VERSION);
 
-$VERSION = '1.02';
+$VERSION = '1.03';
 
 sub spawn {
   my $package = shift;
@@ -758,6 +758,7 @@ Takes a number of optional arguments:
   'version', change the version string reported in 220 responses;
   'relay', specify a 'smart host' to send received mail to, default is
 	   to deliver direct after determining MX records;
+  'time_out', alter the timeout period when sending emails, default 300 seconds;
 
 These optional arguments can be used to enable your own SMTP handling:
 

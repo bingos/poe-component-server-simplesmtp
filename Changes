@@ -1,4 +1,14 @@
 ========================
+2007-05-03 16:31:18 1.02
+========================
+
+  2007-05-03 16:29:41 (r24) by bingos
+  Changes M; lib/POE/Component/Server/SimpleSMTP.pm M
+
+    MX lookup handling wasn't robust enough. Set to requeue messages if
+    we can't get a response from PoCo-Client-DNS. 
+
+========================
 2007-04-02 11:45:23 1.01
 ========================
 
