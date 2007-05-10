@@ -49,7 +49,7 @@ sub _start {
   $_[HEAP]->{smtpd} = POE::Component::Server::SimpleSMTP->spawn(
 	address => '127.0.0.1',
 	port => 0,
-	time_out => 10,
+	client_time_out => 10,
 	options => { trace => 0 },
   );
   isa_ok( $_[HEAP]->{smtpd}, 'POE::Component::Server::SimpleSMTP' );

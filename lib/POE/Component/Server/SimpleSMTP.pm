@@ -13,7 +13,7 @@ use Socket;
 use Storable;
 use vars qw($VERSION);
 
-$VERSION = '1.03';
+$VERSION = '1.04';
 
 sub spawn {
   my $package = shift;
@@ -198,7 +198,7 @@ sub _accept_client {
   };
   $self->_send_event( 'smtpd_connection', $id, $peeraddr, $peerport, $sockaddr, $sockport );
 
-  $self->{clients}->{ $id }->{alarm} = $kernel->delay_set( '_conn_alarm', $self->{time_out} || 300, $id );
+  $self->{clients}->{ $id }->{alarm} = $kernel->delay_set( '_conn_alarm', $self->{client_time_out} || 300, $id );
   return;
 }
 
@@ -214,7 +214,7 @@ sub _accept_failed {
 sub _conn_input {
   my ($kernel,$self,$input,$id) = @_[KERNEL,OBJECT,ARG0,ARG1];
   return unless $self->_conn_exists( $id );
-  $kernel->delay_adjust( $self->{clients}->{ $id }->{alarm}, $self->{time_out} || 300 );
+  $kernel->delay_adjust( $self->{clients}->{ $id }->{alarm}, $self->{client_time_out} || 300 );
   if ( $self->{clients}->{ $id }->{buffer} ) {
     if ( $input eq '.' and $self->{simple} ) {
 	my $mail = delete $self->{clients}->{ $id }->{mail};
@@ -523,6 +523,7 @@ sub _smtp_send_mx {
 	Body => $item->{msg},
 	Server => $exchange,
 	Context => $item,
+	Debug => $self->{smtpc_debug},
 	Timeout => $self->{time_out} || 300,
 	MyHostname => $self->{hostname},
 	SMTP_Success => '_smtp_send_success',
