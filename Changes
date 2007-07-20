@@ -1,4 +1,13 @@
 ========================
+2007-05-10 14:23:32 1.04
+========================
+
+  2007-05-10 14:22:17 (r28) by bingos
+  Changes M; lib/POE/Component/Server/SimpleSMTP.pm M; t/20_timeout.t M
+
+    Added some features to assist in debugging 
+
+========================
 2007-05-09 04:52:39 1.03
 ========================
 
