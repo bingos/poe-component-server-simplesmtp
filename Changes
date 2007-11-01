@@ -1,4 +1,18 @@
 ========================
+2007-07-20 16:53:29 1.05
+========================
+
+  2007-07-20 16:52:23 (r31) by bingos
+  MANIFEST M; lib/POE/Component/Server/SimpleSMTP.pm M
+
+    Stopped the addition of an additional Message-ID header if one
+    already exists. 
+
+  2007-07-20 16:27:37 (r30) by bingos; Changes M
+
+    Bleh 
+
+========================
 2007-05-10 14:23:32 1.04
 ========================
 
