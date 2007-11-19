@@ -12,7 +12,7 @@ requires 'Email::Simple::Creator' => 1.41;
 requires 'Email::Address' => 1.886;
 requires 'POE' => 0.38;
 requires 'POE::Component::Pluggable' => 0.03;
-requires 'POE::Component::Client::SMTP' => 0.13;
+requires 'POE::Component::Client::SMTP' => 0.18;
 requires 'POE::Component::Client::DNS' => 0.99;
 clean_files 'message';
 WriteAll();

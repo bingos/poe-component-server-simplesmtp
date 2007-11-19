@@ -13,7 +13,7 @@ use Socket;
 use Storable;
 use vars qw($VERSION);
 
-$VERSION = '1.06';
+$VERSION = '1.07';
 
 sub spawn {
   my $package = shift;
@@ -26,6 +26,7 @@ sub spawn {
   $opts{handle_connects} = 1 unless defined $opts{handle_connects} and !$opts{handle_connects};
   $opts{hostname} = 'localhost' unless defined $opts{hostname};
   $opts{relay} = 0 unless $opts{relay};
+  $opts{relay_auth} = 'PLAIN' if $opts{relay_auth};
   $opts{version} = join('-', __PACKAGE__, $VERSION ) unless $opts{version};
   my $self = bless \%opts, $package;
   $self->_pluggable_init( prefix => 'smtpd_', types => [ 'SMTPD', 'SMTPC' ], debug => 1 );
@@ -535,6 +536,12 @@ sub _smtp_send_mx {
 sub _smtp_send_relay {
   my ($kernel,$self,$item) = @_[KERNEL,OBJECT,ARG0];
   $item->{count}++;
+  my %auth;
+  if ( $self->{relay_user} and $self->{relay_pass} ) {
+     $auth{mechanism} = $self->{relay_auth} || 'PLAIN',
+     $auth{user} = $self->{relay_user},
+     $auth{pass} = $self->{relay_pass},
+  }
   POE::Component::Client::SMTP->send(
 	From => $item->{from},
 	To   => $item->{rcpt},
@@ -545,6 +552,7 @@ sub _smtp_send_relay {
 	MyHostname => $self->{hostname},
 	SMTP_Success => '_smtp_send_success',
 	SMTP_Failure => '_smtp_send_failure',
+	( scalar keys %auth ? ( Auth => \%auth ) : () ),
   );
   return;
 }
@@ -760,6 +768,9 @@ Takes a number of optional arguments:
   'version', change the version string reported in 220 responses;
   'relay', specify a 'smart host' to send received mail to, default is
 	   to deliver direct after determining MX records;
+  'relay_auth', ESMTP Authentication to use, currently only PLAIN is supported, which is the default;
+  'relay_user', the username required for authenticated relay;
+  'relay_pass', the password required for authenticated relay;
   'time_out', alter the timeout period when sending emails, default 300 seconds;
 
 These optional arguments can be used to enable your own SMTP handling:

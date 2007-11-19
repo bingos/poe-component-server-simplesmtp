@@ -1,4 +1,13 @@
 ========================
+2007-11-01 10:38:20 1.06
+========================
+
+  2007-11-01 10:36:46 (r33) by bingos
+  Makefile.PL M; Changes M; lib/POE/Component/Server/SimpleSMTP.pm M
+
+    Bumped version to release updated distro with Module::Install 0.68 
+
+========================
 2007-07-20 16:53:29 1.05
 ========================
 
