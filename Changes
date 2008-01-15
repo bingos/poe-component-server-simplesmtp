@@ -1,4 +1,14 @@
 ========================
+2007-11-19 16:55:35 1.07
+========================
+
+  2007-11-19 16:54:18 (r35) by bingos
+  Makefile.PL M; Changes M; lib/POE/Component/Server/SimpleSMTP.pm M
+
+    Added Auth mechanism for use with authenticated relays. Suggested by
+    Khisanth. 
+
+========================
 2007-11-01 10:38:20 1.06
 ========================
 

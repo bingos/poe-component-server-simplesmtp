@@ -13,7 +13,7 @@ use Socket;
 use Storable;
 use vars qw($VERSION);
 
-$VERSION = '1.07';
+$VERSION = '1.08';
 
 sub spawn {
   my $package = shift;
@@ -46,6 +46,39 @@ sub spawn {
 
 sub session_id {
   return $_[0]->{session_id};
+}
+
+sub mail_queue {
+  my $self = shift;
+  return map { { %$_ } } @{ $self->{_mail_queue} };
+}
+
+sub pause_queue {
+  my $self = shift;
+  $self->{paused} = 1;
+}
+
+sub resume_queue {
+  my $self = shift;
+  my $pause = delete $self->{paused};
+  $poe_kernel->post( $self->{session_id}, '_process_queue' ) if $pause;
+}
+
+sub paused {
+  return $_[0]->{paused};
+}
+
+sub cancel_message {
+  my $self = shift;
+  my $uid = shift || return;
+  return unless scalar @{ $self->{_mail_queue} };
+  my $i = 0;
+  for ( @{ $self->{_mail_queue} } ) {
+	splice( @{ $self->{_mail_queue} }, $i, 1 ), last
+		 if $_->{uid} eq $uid;
+	++$i;
+  }
+  return 1;
 }
 
 sub data_mode {
@@ -462,6 +495,7 @@ sub _check_recipient {
 
 sub _process_queue {
   my ($kernel,$self) = @_[KERNEL,OBJECT];
+  return if $self->{paused};
   my $item = shift @{ $self->{_mail_queue} };
   $kernel->delay( '_process_queue', 120 );
   return unless $item;
@@ -839,6 +873,26 @@ Returns an arrayref of the current handlers.
 =item set_handlers
 
 Accepts an arrayref of handler hashrefs ( see spawn() for details ).
+
+=item mail_queue
+
+Returns a list of hashrefs relating to items in the current mail queue ( when in 'simple' mode ).
+
+=item pause_queue
+
+Pauses the processing of the mail queue. Any currently processing emails will be allowed to finish.
+
+=item resume_queue
+
+Resumes the processing of the mail queue.
+
+=item paused
+
+Indicates whether the mail queue is paused or not.
+
+=item cancel_message
+
+Takes one mandatory parameter a msg_id to remove from the mail queue.
 
 =back
 

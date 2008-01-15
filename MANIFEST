@@ -21,6 +21,8 @@ t/30_data.t
 t/40_data_fh.t
 t/50_handler.t
 t/60_messageid.t
+t/70_pause.t
+t/80_cancel.t
 t/99_pod.t
 t/99_pod_coverage.t
 t/99_test_kwalitee.t
