@@ -1,4 +1,14 @@
 ========================
+2008-01-15 19:07:22 1.08
+========================
+
+  2008-01-15 18:36:40 (r37) by bingos
+  t/80_cancel.t A; MANIFEST M; Changes M; t/70_pause.t A;
+  lib/POE/Component/Server/SimpleSMTP.pm M
+
+    Added a lot of queue management methods. Hurrah! 
+
+========================
 2007-11-19 16:55:35 1.07
 ========================
 

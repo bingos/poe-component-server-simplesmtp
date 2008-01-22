@@ -13,7 +13,7 @@ use Socket;
 use Storable;
 use vars qw($VERSION);
 
-$VERSION = '1.08';
+$VERSION = '1.10';
 
 sub spawn {
   my $package = shift;
@@ -499,6 +499,7 @@ sub _process_queue {
   my $item = shift @{ $self->{_mail_queue} };
   $kernel->delay( '_process_queue', 120 );
   return unless $item;
+  $item->{attempt}++;
   # Process Recipient Handlers here
   if ( $self->{relay} ) {
     $kernel->yield( '_smtp_send_relay', $item );
