@@ -1,6 +1,7 @@
 package POE::Component::Server::SimpleSMTP::Constants;
 
 use strict;
+use warnings;
 use vars qw($VERSION);
 
 $VERSION = '0.01';

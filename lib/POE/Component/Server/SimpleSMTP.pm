@@ -1,8 +1,9 @@
 package POE::Component::Server::SimpleSMTP;
 
 use strict;
+use warnings;
 use POSIX;
-use POE qw(Component::Client::SMTP Component::Client::DNS Wheel::ReadWrite Filter::Line);
+use POE qw(Component::Client::SMTP Component::Client::DNS Wheel::SocketFactory Wheel::ReadWrite Filter::Line);
 use base qw(POE::Component::Pluggable);
 use POE::Component::Pluggable::Constants qw(:ALL);
 use Email::MessageID;
@@ -13,7 +14,7 @@ use Socket;
 use Storable;
 use vars qw($VERSION);
 
-$VERSION = '1.12';
+$VERSION = '1.14';
 
 sub spawn {
   my $package = shift;
