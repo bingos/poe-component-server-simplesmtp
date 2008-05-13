@@ -10,6 +10,7 @@ inc/Module/Install/Win32.pm
 inc/Module/Install/WriteAll.pm
 lib/POE/Component/Server/SimpleSMTP.pm
 lib/POE/Component/Server/SimpleSMTP/Constants.pm
+LICENSE
 Makefile.PL
 MANIFEST			This list of files
 META.yml
@@ -23,7 +24,7 @@ t/50_handler.t
 t/60_messageid.t
 t/70_pause.t
 t/80_cancel.t
+t/90_transparent.t
 t/99_pod.t
 t/99_pod_coverage.t
-t/99_test_kwalitee.t
 tools/svn-log.perl

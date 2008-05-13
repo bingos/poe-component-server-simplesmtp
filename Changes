@@ -1,4 +1,33 @@
 ========================
+2008-04-15 12:34:52 1.14
+========================
+
+  2008-04-15 12:31:14 (r43) by bingos
+  lib/POE/Component/Server/SimpleSMTP/Constants.pm M; Makefile.PL M;
+  lib/POE/Component/Server/SimpleSMTP.pm M
+
+    Kwalitee fixes mainly
+
+========================
+2008-01-23 14:04:25 1.12
+========================
+
+  2008-01-23 14:04:03 (r41) by bingos
+  lib/POE/Component/Server/SimpleSMTP.pm M
+
+    Added 'subject' item to queued email. 
+
+========================
+2008-01-22 16:37:54 1.10
+========================
+
+  2008-01-22 16:34:38 (r39) by bingos
+  Changes M; lib/POE/Component/Server/SimpleSMTP.pm M
+
+    Added an 'attempt' parameter to the queue items, to indicate how many
+    times this item has been tried to be delivered. 
+
+========================
 2008-01-15 19:07:22 1.08
 ========================
 
