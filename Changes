@@ -1,4 +1,14 @@
 ========================
+2008-10-06 09:11:56 1.18
+========================
+
+  2008-10-06 09:10:09 (r47) by bingos
+  t/50_handler.t M; Makefile.PL M; Changes M;
+  lib/POE/Component/Server/SimpleSMTP.pm M
+
+    Changed to Email::MessageID in_brackets syntax
+
+========================
 2008-05-13 12:58:29 1.16
 ========================
 

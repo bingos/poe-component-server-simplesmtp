@@ -14,7 +14,7 @@ use Socket;
 use Storable;
 use vars qw($VERSION);
 
-$VERSION = '1.18';
+$VERSION = '1.20';
 
 sub spawn {
   my $package = shift;
@@ -600,12 +600,14 @@ sub _smtp_send_relay {
 sub _smtp_send_success {
   my ($kernel,$self,$item) = @_[KERNEL,OBJECT,ARG0];
   $self->send_event( 'smtpd_send_success', $item->{uid} );
+  $kernel->yield( '_process_queue' );
   return;
 }
 
 sub _smtp_send_failure {
   my ($kernel,$self,$item,$error) = @_[KERNEL,OBJECT,ARG0,ARG1];
   $self->send_event( 'smtpd_send_failed', $item->{uid}, $error );
+  $kernel->yield( '_process_queue' );
   if ( $error->{SMTP_Server_Error} and $error->{SMTP_Server_Error} =~ /^5/ ) {
 	return;
   }
