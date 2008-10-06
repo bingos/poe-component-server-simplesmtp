@@ -29,7 +29,7 @@ my %data = (
 	],
 );
 
-plan tests => 15;
+plan tests => 17;
 
 POE::Session->create(
   package_states => [
@@ -137,6 +137,12 @@ sub smtpd_disconnected {
 }
 
 sub _local_recipient {
-  pass($_[STATE]);
+  my $uid = $_[ARG0]->{uid};
+  my $msg = $_[ARG0]->{msg};
+  my $email = Email::Simple->new( $msg );
+  ok( $uid, "There is a UID: $uid" );
+  my $msg_id = $email->header('Message-ID');
+  ok( $msg_id, "There is a Message-ID header: $msg_id" );
+  ok( $msg_id =~ /^<.*>$/, "The Message-ID is in brackets" );
   return;
 }

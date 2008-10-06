@@ -1,4 +1,16 @@
 ========================
+2008-05-13 12:58:29 1.16
+========================
+
+  2008-05-13 12:54:54 (r45) by bingos
+  t/90_transparent.t A; LICENSE A;
+  lib/POE/Component/Server/SimpleSMTP/Constants.pm M; MANIFEST M;
+  Makefile.PL M; Changes M; lib/POE/Component/Server/SimpleSMTP.pm M;
+  t/99_test_kwalitee.t D
+
+    Added SMTP transparency support
+
+========================
 2008-04-15 12:34:52 1.14
 ========================
 
