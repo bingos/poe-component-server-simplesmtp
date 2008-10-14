@@ -14,7 +14,7 @@ use Socket;
 use Storable;
 use vars qw($VERSION);
 
-$VERSION = '1.22';
+$VERSION = '1.24';
 
 sub spawn {
   my $package = shift;
@@ -501,6 +501,7 @@ sub _check_recipient {
 sub _process_queue {
   my ($kernel,$self) = @_[KERNEL,OBJECT];
   return if $self->{paused};
+  return if $self->{_smtp_clients} and $self->{_smtp_clients} >= 5;
   my $item = shift @{ $self->{_mail_queue} };
   $kernel->delay_set( '_process_queue', 120 );
   return unless $item;
@@ -558,6 +559,7 @@ sub _smtp_send_mx {
   $item->{count}++;
   my $exchange = shift @{ $item->{mx} };
   push @{ $item->{mx} }, $exchange;
+  $self->{_smtp_clients}++;
   POE::Component::Client::SMTP->send(
 	From => $item->{from},
 	To   => $item->{rcpt},
@@ -582,6 +584,7 @@ sub _smtp_send_relay {
      $auth{user} = $self->{relay_user},
      $auth{pass} = $self->{relay_pass},
   }
+  $self->{_smtp_clients}++;
   POE::Component::Client::SMTP->send(
 	From => $item->{from},
 	To   => $item->{rcpt},
@@ -601,13 +604,14 @@ sub _smtp_send_success {
   my ($kernel,$self,$item) = @_[KERNEL,OBJECT,ARG0];
   $self->send_event( 'smtpd_send_success', $item->{uid} );
   $kernel->delay_set( '_process_queue', 20 );
+  $self->{_smtp_clients}--;
   return;
 }
 
 sub _smtp_send_failure {
   my ($kernel,$self,$item,$error) = @_[KERNEL,OBJECT,ARG0,ARG1];
   $self->send_event( 'smtpd_send_failed', $item->{uid}, $error );
-  $kernel->delay_set( '_process_queue', 20 );
+  $self->{_smtp_clients}--;
   if ( $error->{SMTP_Server_Error} and $error->{SMTP_Server_Error} =~ /^5/ ) {
 	return;
   }
@@ -615,6 +619,7 @@ sub _smtp_send_failure {
 	return;
   }
   push @{ $self->{_mail_queue} }, $item;
+  $kernel->delay_set( '_process_queue', 20 );
   return;
 }
 

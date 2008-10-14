@@ -1,4 +1,14 @@
 ========================
+2008-10-14 11:59:52 1.22
+========================
+
+  2008-10-14 11:59:38 (r51) by bingos
+  Changes M; lib/POE/Component/Server/SimpleSMTP.pm M
+
+    Adding delays to queue processing, hopefully stop the insane loops
+    under load
+
+========================
 2008-10-06 10:59:33 1.20
 ========================
 
