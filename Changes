@@ -1,4 +1,13 @@
 ========================
+2008-10-06 10:59:33 1.20
+========================
+
+  2008-10-06 10:59:02 (r49) by bingos
+  Changes M; lib/POE/Component/Server/SimpleSMTP.pm M
+
+    Make queue processing more responsive
+
+========================
 2008-10-06 09:11:56 1.18
 ========================
 
