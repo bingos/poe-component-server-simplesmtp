@@ -1,4 +1,13 @@
 ========================
+2008-10-15 12:38:33 1.28
+========================
+
+  2008-10-15 12:38:17 (r57) by bingos
+  Changes M; lib/POE/Component/Server/SimpleSMTP.pm M
+
+    Added message subject to the message_queued event args
+
+========================
 2008-10-15 06:00:37 1.26
 ========================
 

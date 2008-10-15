@@ -14,7 +14,7 @@ use Socket;
 use Storable;
 use vars qw($VERSION);
 
-$VERSION = '1.28';
+$VERSION = '1.30';
 
 sub spawn {
   my $package = shift;
@@ -760,6 +760,7 @@ sub SMTPD_message {
   push @{ $self->{_mail_queue} }, { uid => $uid, from => $from, rcpt => $rcpt, msg => $email->as_string, ts => time(), subject => $subject };
   $poe_kernel->post( $self->{session_id}, '_process_queue' );
   $self->send_event( 'smtpd_message_queued', $id, $from, $rcpt, $uid, scalar @{ $buf }, $subject || '' );
+  delete $self->{clients}->{$id}->{$_} for qw(mail rcpt buffer);
   return PLUGIN_EAT_ALL;
 }
 
