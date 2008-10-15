@@ -1,4 +1,13 @@
 ========================
+2008-10-15 06:00:37 1.26
+========================
+
+  2008-10-15 06:00:15 (r55) by bingos
+  Changes M; lib/POE/Component/Server/SimpleSMTP.pm M
+
+    Documented maximum connections maxrelay
+
+========================
 2008-10-14 21:42:56 1.24
 ========================
 

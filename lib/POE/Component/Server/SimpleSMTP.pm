@@ -14,7 +14,7 @@ use Socket;
 use Storable;
 use vars qw($VERSION);
 
-$VERSION = '1.26';
+$VERSION = '1.28';
 
 sub spawn {
   my $package = shift;
@@ -759,7 +759,7 @@ sub SMTPD_message {
   my $subject = $email->header('Subject') || '';
   push @{ $self->{_mail_queue} }, { uid => $uid, from => $from, rcpt => $rcpt, msg => $email->as_string, ts => time(), subject => $subject };
   $poe_kernel->post( $self->{session_id}, '_process_queue' );
-  $self->send_event( 'smtpd_message_queued', $id, $from, $rcpt, $uid, scalar @{ $buf } );
+  $self->send_event( 'smtpd_message_queued', $id, $from, $rcpt, $uid, scalar @{ $buf }, $subject || '' );
   return PLUGIN_EAT_ALL;
 }
 
@@ -1017,6 +1017,7 @@ Generated whenever a mail message is queued.
   ARG2 is an arrayref of recipients;
   ARG3 is the email unique idenitifer;
   ARG4 is the number of lines of the message;
+  ARG5 is the subject line of the message, if applicable
 
 =item smtpd_send_success
 
