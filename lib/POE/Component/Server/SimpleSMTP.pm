@@ -14,7 +14,7 @@ use Socket;
 use Storable;
 use vars qw($VERSION);
 
-$VERSION = '1.24';
+$VERSION = '1.26';
 
 sub spawn {
   my $package = shift;
@@ -27,6 +27,7 @@ sub spawn {
   $opts{handle_connects} = 1 unless defined $opts{handle_connects} and !$opts{handle_connects};
   $opts{hostname} = 'localhost' unless defined $opts{hostname};
   $opts{relay} = 0 unless $opts{relay};
+  $opts{maxrelay} = 5 unless $opts{maxrelay};
   $opts{relay_auth} = 'PLAIN' if $opts{relay_auth};
   $opts{version} = join('-', __PACKAGE__, $VERSION ) unless $opts{version};
   my $self = bless \%opts, $package;
@@ -501,7 +502,7 @@ sub _check_recipient {
 sub _process_queue {
   my ($kernel,$self) = @_[KERNEL,OBJECT];
   return if $self->{paused};
-  return if $self->{_smtp_clients} and $self->{_smtp_clients} >= 5;
+  return if $self->{_smtp_clients} and $self->{_smtp_clients} >= $self->{maxrelay};
   my $item = shift @{ $self->{_mail_queue} };
   $kernel->delay_set( '_process_queue', 120 );
   return unless $item;
@@ -820,6 +821,7 @@ Takes a number of optional arguments:
   'relay_user', the username required for authenticated relay;
   'relay_pass', the password required for authenticated relay;
   'time_out', alter the timeout period when sending emails, default 300 seconds;
+  'maxrelay', maximum number of concurrent outgoing emails, defaults to 5;
 
 These optional arguments can be used to enable your own SMTP handling:
 

@@ -1,4 +1,14 @@
 ========================
+2008-10-14 21:42:56 1.24
+========================
+
+  2008-10-14 21:42:37 (r53) by bingos
+  Changes M; lib/POE/Component/Server/SimpleSMTP.pm M
+
+    Fiddled with the queue timers, added a 5 connection limit to our
+    senders
+
+========================
 2008-10-14 11:59:52 1.22
 ========================
 
