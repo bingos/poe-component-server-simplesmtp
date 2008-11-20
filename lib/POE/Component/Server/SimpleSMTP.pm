@@ -840,6 +840,7 @@ Takes a number of optional arguments:
   'relay_pass', the password required for authenticated relay;
   'time_out', alter the timeout period when sending emails, default 300 seconds;
   'maxrelay', maximum number of concurrent outgoing emails, defaults to 5;
+  'domains', an arrayref of domain/hostnames that we will accept mail for;
 
 These optional arguments can be used to enable your own SMTP handling:
 
