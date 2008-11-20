@@ -14,7 +14,7 @@ use Socket;
 use Storable;
 use vars qw($VERSION);
 
-$VERSION = '1.30';
+$VERSION = '1.32';
 
 sub spawn {
   my $package = shift;
@@ -22,7 +22,8 @@ sub spawn {
   $opts{lc $_} = delete $opts{$_} for keys %opts;
   my $options = delete $opts{options};
   _massage_handlers( $opts{handlers} ) if $opts{handlers};
-  $opts{handlers} = [ ] unless $opts{handlers};
+  $opts{handlers} = [ ] unless $opts{handlers} and ref $opts{handlers} eq 'ARRAY';
+  $opts{domains}  = [ ] unless $opts{domains} and ref $opts{domains} eq 'ARRAY';
   $opts{simple} = 1 unless defined $opts{simple} and !$opts{simple};
   $opts{handle_connects} = 1 unless defined $opts{handle_connects} and !$opts{handle_connects};
   $opts{hostname} = 'localhost' unless defined $opts{hostname};
@@ -679,8 +680,14 @@ sub SMTPD_cmd_rcpt {
      $response = '503 Need MAIL before RCPT';
   }
   elsif ( my ($to) = $args =~ /^to:\s*<(.+)>/i ) {
-     $response = "250 <$to>... Recipient OK";
-     push @{ $self->{clients}->{ $id }->{rcpt} }, $to;
+     # TODO scan through $self->{domains} and reject as necessary.
+     unless ( $self->_recipient_domain( $to ) ) {
+	$response = "550 #5.1.0 Address rejected $to";
+     }
+     else {
+	$response = "250 <$to>... Recipient OK";
+	push @{ $self->{clients}->{ $id }->{rcpt} }, $to;
+     }
   }
   else {
      $args = '' unless $args;
@@ -688,6 +695,16 @@ sub SMTPD_cmd_rcpt {
   }
   $self->send_to_client( $id, $response );
   return PLUGIN_EAT_ALL;
+}
+
+sub _recipient_domain {
+  my $self = shift;
+  return 1 unless scalar @{ $self->{domains} };
+  my $address = shift || return;
+  my $hostpart = ( split /\@/, $address )[-1];
+  return unless $hostpart;
+  return 1 if grep { uc $_ eq uc $hostpart } @{ $self->{domains} };
+  return 0;
 }
 
 sub SMTPD_cmd_data {

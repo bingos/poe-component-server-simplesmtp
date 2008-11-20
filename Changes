@@ -1,4 +1,14 @@
 ========================
+2008-10-15 20:36:59 1.30
+========================
+
+  2008-10-15 20:35:46 (r59) by bingos
+  Changes M; lib/POE/Component/Server/SimpleSMTP.pm M
+
+    We were not clearing the client state table after accepting a msg for
+    delivery. fixed.
+
+========================
 2008-10-15 12:38:33 1.28
 ========================
 

@@ -21,6 +21,7 @@ t/20_timeout.t
 t/30_data.t
 t/40_data_fh.t
 t/50_handler.t
+t/55_domains.t
 t/60_messageid.t
 t/70_pause.t
 t/80_cancel.t
