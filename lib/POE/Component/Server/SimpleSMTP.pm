@@ -4,6 +4,7 @@ use strict;
 use warnings;
 use POSIX;
 use POE qw(Component::Client::SMTP Component::Client::DNS Wheel::SocketFactory Wheel::ReadWrite Filter::Transparent::SMTP);
+use POE::Component::Client::DNSBL;
 use base qw(POE::Component::Pluggable);
 use POE::Component::Pluggable::Constants qw(:ALL);
 use Email::MessageID;
@@ -14,7 +15,7 @@ use Socket;
 use Storable;
 use vars qw($VERSION);
 
-$VERSION = '1.32';
+$VERSION = '1.34';
 
 sub spawn {
   my $package = shift;
@@ -39,7 +40,7 @@ sub spawn {
 		      send_event     => '__send_event',
 		      send_to_client => '_send_to_client',
 	            },
-	   $self => [ qw(_start register unregister _accept_client _accept_failed _conn_input _conn_error _conn_flushed _conn_alarm _send_to_client __send_event _process_queue _smtp_send_relay _smtp_send_mx _smtp_send_success _smtp_send_failure _process_dns_mx _fh_buffer _buffer_error _buffer_flush) ],
+	   $self => [ qw(_start register unregister _accept_client _accept_failed _conn_input _conn_error _conn_flushed _conn_alarm _send_to_client __send_event _process_queue _smtp_send_relay _smtp_send_mx _smtp_send_success _smtp_send_failure _process_dns_mx _fh_buffer _buffer_error _buffer_flush _dnsbl) ],
 	],
 	heap => $self,
 	( ref($options) eq 'HASH' ? ( options => $options ) : () ),
@@ -209,6 +210,12 @@ sub _start {
 
   $self->{resolver} = POE::Component::Client::DNS->spawn()
     unless $self->{resolver} and $self->{resolver}->isa('POE::Component::Client::DNS');
+
+  $self->{_dnsbl} = POE::Component::Client::DNSBL->spawn(
+	resolver => $self->{resolver},
+	dnsbl    => $self->{dnsbl},
+  ) if $self->{dnsbl_enable};
+
   return;
 }
 
@@ -338,6 +345,7 @@ sub _shutdown {
   $kernel->refcount_decrement( $self->{session_id} => __PACKAGE__ ) unless $self->{alias};
   $self->_pluggable_destroy();
   $self->_unregister_sessions();
+  $self->{_dnsbl}->shutdown() if $self->{dnsbl_enable};
   $self->{resolver}->shutdown();
   undef;
 }
@@ -628,9 +636,30 @@ sub _smtp_send_failure {
 sub SMTPD_connection {
   my ($self,$smtpd) = splice @_, 0, 2;
   my $id = ${ $_[0] };
+  my $peeraddr = ${ $_[1] };
   return PLUGIN_EAT_NONE unless $self->{handle_connects};
-  $self->send_to_client( $id, join ' ', '220', $self->{hostname}, $self->{version}, 'ready' );
+  unless ( $self->{dnsbl_enable} ) {
+     $self->send_to_client( $id, join ' ', '220', $self->{hostname}, $self->{version}, 'ready' );
+  }
+  else {
+     $self->{_dnsbl}->lookup( session => $self->{session_id}, event => '_dnsbl', address => $peeraddr, _id => $id );
+  }
   return PLUGIN_EAT_NONE;
+}
+
+sub _dnsbl {
+  my ($kernel,$self,$data) = @_[KERNEL,OBJECT,ARG0];
+  my $id = $data->{_id};
+  my $to_client = join ' ', '220 ', $self->{hostname}, $self->{version}, 'ready';
+  if ( $data->{error} ) {
+     $self->{clients}->{ $id }->{dnsbl} = 'NXDOMAIN';
+  }
+  else {
+     $self->{clients}->{ $id }->{dnsbl} = $data->{response};
+     $to_client = '554 No SMTP service here' if $data->{response} ne 'NXDOMAIN';
+  }
+  $self->send_to_client( $id, $to_client );
+  return;
 }
 
 sub SMTPD_cmd_helo {
@@ -655,7 +684,10 @@ sub SMTPD_cmd_mail {
   my $id = ${ $_[0] };
   my $args = ${ $_[1] };
   my $response;
-  if ( $self->{clients}->{ $id }->{mail} ) {
+  if ( $self->{dnsbl_enable} and ( !$self->{clients}->{ $id }->{dnsbl} or $self->{clients}->{ $id }->{dnsbl} ne 'NXDOMAIN' ) ) {
+     $response = '503 bad sequence of commands';
+  }
+  elsif ( $self->{clients}->{ $id }->{mail} ) {
      $response = '503 Sender already specified';
   }
   elsif ( my ($from) = $args =~ /^from:\s*<(.+)>/i ) {
@@ -858,6 +890,15 @@ handler, it is removed from the process queue and dispatched instead to indicate
 	'match', a regexp to apply;
 	'session', The session to send the email to;
 	'event', The event to trigger;
+
+You may also enable DNSBL lookups of connecting clients with the following options:
+
+  'dnsbl_enable', set to a true value to enable DNSBL suuport;
+  'dnsbl', set to a DNSBL to query, default is zen.spamhaus.org;
+
+DNSBL support uses L<POE::Component::Client::DNSBL> to make blacklist queries for each 
+connecting client. If a client is found in the blacklist, any further interaction with the
+client is denied.
 
 See OUTPUT EVENTS below for information on what a handler event contains.
 

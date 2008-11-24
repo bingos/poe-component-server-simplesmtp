@@ -1,4 +1,19 @@
 ========================
+2008-11-20 10:45:14 1.32
+========================
+
+  2008-11-20 10:44:02 (r62) by bingos
+  lib/POE/Component/Server/SimpleSMTP.pm M
+
+    Updated POD
+
+  2008-11-20 09:19:40 (r61) by bingos
+  MANIFEST M; Changes M; t/55_domains.t A;
+  lib/POE/Component/Server/SimpleSMTP.pm M
+
+    Added recipient domain checking/rejecting
+
+========================
 2008-10-15 20:36:59 1.30
 ========================
 

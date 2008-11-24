@@ -24,6 +24,7 @@ requires 'POE::Component::Pluggable' => 0.03;
 requires 'POE::Filter::Transparent::SMTP' => 0;
 requires 'POE::Component::Client::SMTP' => 0.18;
 requires 'POE::Component::Client::DNS' => 0.99;
+requires 'POE::Component::Client::DNSBL' => 0.08;
 makemaker_args(dist => { PREOP => "$^X ./tools/svn-log.perl > ./Changes" });
 clean_files 'message';
 WriteAll();

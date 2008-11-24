@@ -17,6 +17,7 @@ META.yml
 README
 t/00_use.t
 t/10_basic.t
+t/10_dnsbl.t
 t/20_timeout.t
 t/30_data.t
 t/40_data_fh.t
