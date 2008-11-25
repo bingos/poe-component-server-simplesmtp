@@ -31,7 +31,7 @@ my %data = (
 	],
 );
 
-plan tests => 14;
+plan tests => 15;
 
 POE::Session->create(
   package_states => [
@@ -44,6 +44,7 @@ POE::Session->create(
 			smtpd_registered
 			smtpd_connection
 			smtpd_disconnected
+			smtpd_dnsbl
 	)],
   ],
   heap => \%data,
@@ -121,5 +122,12 @@ sub smtpd_connection {
 
 sub smtpd_disconnected {
   pass($_[STATE]);
+  return;
+}
+
+sub smtpd_dnsbl {
+  my ($response,$dnsbl) = @_[ARG1,ARG2];
+  pass($_[STATE]);
+  diag("$response\n");
   return;
 }

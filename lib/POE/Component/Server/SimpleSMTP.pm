@@ -15,7 +15,7 @@ use Socket;
 use Storable;
 use vars qw($VERSION);
 
-$VERSION = '1.34';
+$VERSION = '1.36';
 
 sub spawn {
   my $package = shift;
@@ -639,7 +639,7 @@ sub SMTPD_connection {
   my $peeraddr = ${ $_[1] };
   return PLUGIN_EAT_NONE unless $self->{handle_connects};
   unless ( $self->{dnsbl_enable} ) {
-     $self->send_to_client( $id, join ' ', '220', $self->{hostname}, $self->{version}, 'ready' );
+     $self->send_to_client( $id, join( ' ', '220', $self->{hostname}, $self->{version}, 'ready' ) );
   }
   else {
      $self->{_dnsbl}->lookup( session => $self->{session_id}, event => '_dnsbl', address => $peeraddr, _id => $id );
@@ -649,8 +649,9 @@ sub SMTPD_connection {
 
 sub _dnsbl {
   my ($kernel,$self,$data) = @_[KERNEL,OBJECT,ARG0];
-  my $id = $data->{_id};
-  my $to_client = join ' ', '220 ', $self->{hostname}, $self->{version}, 'ready';
+  my $id = delete $data->{_id};
+  delete $data->{$_} for qw(event session);
+  my $to_client = join ' ', '220', $self->{hostname}, $self->{version}, 'ready';
   if ( $data->{error} ) {
      $self->{clients}->{ $id }->{dnsbl} = 'NXDOMAIN';
   }
@@ -659,6 +660,7 @@ sub _dnsbl {
      $to_client = '554 No SMTP service here' if $data->{response} ne 'NXDOMAIN';
   }
   $self->send_to_client( $id, $to_client );
+  $self->_send_event( 'smtpd_dnsbl', $id, $to_client, $data );
   return;
 }
 
@@ -952,7 +954,7 @@ Accepts an arrayref of handler hashrefs ( see spawn() for details ).
 
 =item mail_queue
 
-Returns a list of hashrefs relating to items in the current mail queue ( when in 'simple' mode ).
+Returns a list of hashrefs relating to items in the current mail queue ( when in C<simple> mode ).
 
 =item pause_queue
 
@@ -1040,7 +1042,7 @@ Generated for each SMTP command that a connected client sends to us. ARG0 is the
 client ID. ARG1 .. ARGn are any parameters that are sent with the command. Check 
 the RFC L<http://www.faqs.org/rfcs/rfc2821.html> for details.
 
-If 'simple' is true ( which is the default ), the component deals with client
+If C<simple> is true ( which is the default ), the component deals with client
 commands itself.
 
 =item smtpd_data
@@ -1050,7 +1052,7 @@ Generated when a client sends an email.
   ARG0 will be the client ID;
   ARG1 an arrayref of lines sent by the client, stripped of CRLF line endings;
 
-If 'simple' is true ( which is the default ), the component will deal with 
+If C<simple> is true ( which is the default ), the component will deal with 
 receiving data from the client itself.
 
 =item smtpd_data_fh
@@ -1059,12 +1061,25 @@ Generated when a client sends an email and a filehandle has been provided.
 
   ARG0 will be the client ID;
 
-If 'simple' is true ( which is the default ), the component will deal with 
+If C<simple> is true ( which is the default ), the component will deal with 
 receiving data from the client itself.
+
+=item smtpd_dnsbl
+
+Generated when a DNSBL lookup is completed, in C<simple> mode.
+
+  ARG0 will be the client ID;
+  ARG1 will be the response sent to the client, either a 220 or 554;
+  ARG2 will be a hashref with the following keys:
+
+    'response', the status returned by the DNSBL, it will be NXDOMAIN if the address given was okay;
+    'reason', if an address is blacklisted, this may contain the reason;
+    'error', if something goes wrong with the DNS lookup the error string will be contained here;
+    'dnsbl', the DNSBL that was used for this request;
 
 =back
 
-In 'simple' mode these events will be generated:
+In C<simple> mode these events will be generated:
 
 =over
 
