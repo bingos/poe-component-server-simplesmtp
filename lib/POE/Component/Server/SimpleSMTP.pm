@@ -15,7 +15,7 @@ use Socket;
 use Storable;
 use vars qw($VERSION);
 
-$VERSION = '1.36';
+$VERSION = '1.38';
 
 sub spawn {
   my $package = shift;
@@ -39,6 +39,7 @@ sub spawn {
 	   $self => { shutdown       => '_shutdown',
 		      send_event     => '__send_event',
 		      send_to_client => '_send_to_client',
+		      start_listener => '_start_listener',
 	            },
 	   $self => [ qw(_start register unregister _accept_client _accept_failed _conn_input _conn_error _conn_flushed _conn_alarm _send_to_client __send_event _process_queue _smtp_send_relay _smtp_send_mx _smtp_send_success _smtp_send_failure _process_dns_mx _fh_buffer _buffer_error _buffer_flush _dnsbl) ],
 	],
@@ -197,6 +198,31 @@ sub _start {
 
   $self->{cmds} = [ qw(ehlo helo mail rcpt data noop vrfy rset expn help quit) ];
 
+  $kernel->call( $self->{session_id}, 'start_listener' );
+
+  $self->{resolver} = POE::Component::Client::DNS->spawn()
+    unless $self->{resolver} and $self->{resolver}->isa('POE::Component::Client::DNS');
+
+  $self->{_dnsbl} = POE::Component::Client::DNSBL->spawn(
+	resolver => $self->{resolver},
+	dnsbl    => $self->{dnsbl},
+  ) if $self->{dnsbl_enable};
+
+
+  return;
+}
+
+sub start_listener {
+  my $self = shift;
+  $poe_kernel->post( $self->{session_id}, 'start_listener', @_ );
+}
+
+sub _start_listener {
+  my ($kernel,$self) = @_[KERNEL,OBJECT];
+  if ( $self->{listener} ) {
+     warn "Listener already started\n";
+     return;
+  }
   $self->{listener} = POE::Wheel::SocketFactory->new(
       ( defined $self->{address} ? ( BindAddress => $self->{address} ) : () ),
       ( defined $self->{port} ? ( BindPort => $self->{port} ) : ( BindPort => 25 ) ),
@@ -207,15 +233,6 @@ sub _start {
       SocketProtocol => 'tcp',               # Sets the socket() protocol
       Reuse          => 'on',                # Lets the port be reused
   );
-
-  $self->{resolver} = POE::Component::Client::DNS->spawn()
-    unless $self->{resolver} and $self->{resolver}->isa('POE::Component::Client::DNS');
-
-  $self->{_dnsbl} = POE::Component::Client::DNSBL->spawn(
-	resolver => $self->{resolver},
-	dnsbl    => $self->{dnsbl},
-  ) if $self->{dnsbl_enable};
-
   return;
 }
 
@@ -495,6 +512,7 @@ sub _send_to_client {
 
   return 1 if $self->_pluggable_process( 'SMTPC', 'response', $id, \$output ) == PLUGIN_EAT_ALL;
 
+  return unless $self->_conn_exists( $id ) and defined $self->{clients}->{ $id }->{wheel};
   $self->{clients}->{ $id }->{wheel}->put($output);
   return 1;
 }
@@ -912,23 +930,23 @@ Returns a POE::Component::Server::SimpleSMTP object.
 
 =over
 
-=item session_id
+=item C<session_id>
 
 Returns the POE::Session ID of the component.
 
-=item shutdown
+=item C<shutdown>
 
 Terminates the component. Shuts down the listener and disconnects connected clients.
 
-=item send_event
+=item C<send_event>
 
 Sends an event through the component's event handling system.
 
-=item send_to_client
+=item C<send_to_client>
 
 Send some output to a connected client. First parameter must be a valid client id. Second parameter is a string of text to send.
 
-=item data_mode
+=item C<data_mode>
 
 Takes one argument a valid client ID. Switches the client connection to data mode for receiving 
 an mail message. This should be done in response to a valid DATA command from a client if
@@ -940,37 +958,42 @@ Optionally, you may supply a filehandle as a second argument. Any data received 
 will be written to the filehandle. You will receive an 'smtpd_data_fh' event when the client
 has finished sending data.
 
-=item getsockname
+=item C<getsockname>
 
 Access to the L<POE::Wheel::SocketFactory> method of the underlying listening socket.
 
-=item get_handlers
+=item C<get_handlers>
 
 Returns an arrayref of the current handlers.
 
-=item set_handlers
+=item C<set_handlers>
 
 Accepts an arrayref of handler hashrefs ( see spawn() for details ).
 
-=item mail_queue
+=item C<mail_queue>
 
 Returns a list of hashrefs relating to items in the current mail queue ( when in C<simple> mode ).
 
-=item pause_queue
+=item C<pause_queue>
 
 Pauses the processing of the mail queue. Any currently processing emails will be allowed to finish.
 
-=item resume_queue
+=item C<resume_queue>
 
 Resumes the processing of the mail queue.
 
-=item paused
+=item C<paused>
 
 Indicates whether the mail queue is paused or not.
 
-=item cancel_message
+=item C<cancel_message>
 
 Takes one mandatory parameter a msg_id to remove from the mail queue.
+
+=item C<start_listener>
+
+Takes no arguments, start the socket listener if it has stopped for any reason. Will fail if the listener is
+already erm listening.
 
 =back
 
@@ -980,29 +1003,34 @@ These are events that the component will accept:
 
 =over
 
-=item register
+=item C<register>
 
 Takes N arguments: a list of event names that your session wants to listen for, minus the 'smtpd_' prefix, ( this is 
 similar to L<POE::Component::IRC> ). 
 
 Registering for 'all' will cause it to send all SMTPD-related events to you; this is the easiest way to handle it.
 
-=item unregister
+=item C<unregister>
 
 Takes N arguments: a list of event names which you don't want to receive. If you've previously done a 'register' for a particular event which you no longer care about, this event will tell the SMTPD to stop sending them to you. (If you haven't, it just ignores you. No big deal).
 
-=item shutdown
+=item C<shutdown>
 
 Terminates the component. Shuts down the listener and disconnects connected clients.
 
-=item send_event
+=item C<send_event>
 
 Sends an event through the component's event handling system. 
 
-=item send_to_client
+=item C<send_to_client>
 
 Send some output to a connected client. First parameter must be a valid client ID. 
 Second parameter is a string of text to send.
+
+=item C<start_listener>
+
+Takes no arguments, start the socket listener if it has stopped for any reason. Will fail if the listener is
+already erm listening.
 
 =back
 
@@ -1012,18 +1040,18 @@ The component sends the following events to registered sessions:
 
 =over
 
-=item smtpd_registered
+=item C<smtpd_registered>
 
 This event is sent to a registering session. ARG0 is POE::Component::Server::SimpleSMTP
 object.
 
-=item smtpd_listener_failed
+=item C<smtpd_listener_failed>
 
 Generated if the component cannot either start a listener or there is a problem
 accepting client connections. ARG0 contains the name of the operation that failed. 
 ARG1 and ARG2 hold numeric and string values for $!, respectively.
 
-=item smtpd_connection
+=item C<smtpd_connection>
 
 Generated whenever a client connects to the component. ARG0 is the client ID, ARG1
 is the client's IP address, ARG2 is the client's TCP port. ARG3 is our IP address and
@@ -1032,11 +1060,11 @@ ARG4 is our socket port.
 If 'handle_connects' is true ( which is the default ), the component will automatically
 send a 220 SMTP response to the client.
 
-=item smtpd_disconnected
+=item C<smtpd_disconnected>
 
 Generated whenever a client disconnects. ARG0 is the client ID.
 
-=item smtpd_cmd_*
+=item C<smtpd_cmd_*>
 
 Generated for each SMTP command that a connected client sends to us. ARG0 is the 
 client ID. ARG1 .. ARGn are any parameters that are sent with the command. Check 
@@ -1045,7 +1073,7 @@ the RFC L<http://www.faqs.org/rfcs/rfc2821.html> for details.
 If C<simple> is true ( which is the default ), the component deals with client
 commands itself.
 
-=item smtpd_data
+=item C<smtpd_data>
 
 Generated when a client sends an email.
 
@@ -1055,7 +1083,7 @@ Generated when a client sends an email.
 If C<simple> is true ( which is the default ), the component will deal with 
 receiving data from the client itself.
 
-=item smtpd_data_fh
+=item C<smtpd_data_fh>
 
 Generated when a client sends an email and a filehandle has been provided.
 
@@ -1064,7 +1092,7 @@ Generated when a client sends an email and a filehandle has been provided.
 If C<simple> is true ( which is the default ), the component will deal with 
 receiving data from the client itself.
 
-=item smtpd_dnsbl
+=item C<smtpd_dnsbl>
 
 Generated when a DNSBL lookup is completed, in C<simple> mode.
 
@@ -1083,7 +1111,7 @@ In C<simple> mode these events will be generated:
 
 =over
 
-=item smtpd_message_queued
+=item C<smtpd_message_queued>
 
 Generated whenever a mail message is queued. 
 
@@ -1100,7 +1128,7 @@ Generated whenever a mail message is successfully delivered.
 
   ARG0 is the email unique identifier;
 
-=item smtpd_send_failed
+=item C<smtpd_send_failed>
 
 Generated whenever a mail message is unsuccessfully delivered. This can be for a variety of reasons. The poco
 will attempt to resend the message on non-fatal errors ( such as an explicit denial of delivery by the SMTP peer ), for up to 4 days.
@@ -1130,12 +1158,12 @@ There are two types of handlers that can registered for by plugins, these are
 
 =over
 
-=item SMTPD
+=item C<SMTPD>
 
 These are the 'smtpd_' prefixed events that are generated. In a handler arguments are
 passed as scalar refs so that you may mangle the values if required.
 
-=item SMTPC
+=item C<SMTPC>
 
 These are generated whenever a response is sent to a client. Again, any 
 arguments passed are scalar refs for manglement. There is really on one type
@@ -1155,23 +1183,23 @@ The return values have the following significance:
 
 =over 
 
-=item SMTPD_EAT_NONE
+=item C<SMTPD_EAT_NONE>
 
 This means the event will continue to be processed by remaining plugins and
 finally, sent to interested sessions that registered for it.
 
-=item SMTP_EAT_CLIENT
+=item C<SMTP_EAT_CLIENT>
 
 This means the event will continue to be processed by remaining plugins but
 it will not be sent to any sessions that registered for it. This means nothing
 will be sent out on the wire if it was an SMTPC event, beware!
 
-=item SMTPD_EAT_PLUGIN
+=item C<SMTPD_EAT_PLUGIN>
 
 This means the event will not be processed by remaining plugins, it will go
 straight to interested sessions.
 
-=item SMTPD_EAT_ALL
+=item C<SMTPD_EAT_ALL>
 
 This means the event will be completely discarded, no plugin or session will see it. This
 means nothing will be sent out on the wire if it was an SMTPC event, beware!
@@ -1184,11 +1212,11 @@ The following methods are available:
 
 =over
 
-=item pipeline
+=item C<pipeline>
 
 Returns the L<POE::Component::Pluggable::Pipeline> object.
 
-=item plugin_add
+=item C<plugin_add>
 
 Accepts two arguments:
 
@@ -1205,7 +1233,7 @@ This method goes through the pipeline's push() method.
 Returns the number of plugins now in the pipeline if plugin was initialized, undef
 if not.
 
-=item plugin_del
+=item C<plugin_del>
 
 Accepts one argument:
 
@@ -1217,7 +1245,7 @@ This method will call $plugin->plugin_unregister( $nntpd )
 
 Returns the plugin object if the plugin was removed, undef if not.
 
-=item plugin_get
+=item C<plugin_get>
 
 Accepts one argument:
 
@@ -1227,21 +1255,21 @@ This method goes through the pipeline's get() method.
 
 Returns the plugin object if it was found, undef if not.
 
-=item plugin_list
+=item C<plugin_list>
 
 Has no arguments.
 
 Returns a hashref of plugin objects, keyed on alias, or an empty list if there are no
 plugins loaded.
 
-=item plugin_order
+=item C<plugin_order>
 
 Has no arguments.
 
 Returns an arrayref of plugin objects, in the order which they are encountered in the
 pipeline.
 
-=item plugin_register
+=item C<plugin_register>
 
 Accepts the following arguments:
 
@@ -1258,7 +1286,7 @@ It is possible to register for all events by specifying 'all' as an event.
 
 Returns 1 if everything checked out fine, undef if something's seriously wrong
 
-=item plugin_unregister
+=item C<plugin_unregister>
 
 Accepts the following arguments:
 
@@ -1345,7 +1373,7 @@ Chris C<BinGOs> Williams <chris@bingosnet.co.uk>
 
 =head1 LICENSE
 
-Copyright C<(c)> Chris Williams.
+Copyright E<copy> Chris Williams.
 
 This module may be used, modified, and distributed under the same terms as Perl itself. Please see the license that came with your Perl distribution for details.
 
