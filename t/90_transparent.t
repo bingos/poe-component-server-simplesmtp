@@ -25,7 +25,7 @@ my %data = (
 	)->as_string(), 
 );
 
-plan tests => 10;
+plan tests => 11;
 
 POE::Session->create(
   package_states => [
@@ -116,8 +116,10 @@ sub smtpd_cmd_data {
 }
 
 sub smtpd_data {
-  my ($heap,$id) = @_[HEAP,ARG0];
+  my ($heap,$id,$data) = @_[HEAP,ARG0,ARG1];
   pass($_[STATE]);
+  my $last = pop @{ $data };
+  ok( $last eq '.My bRain hUrts!', '.My bRain hUrts!' );
   my $msg_id = Email::MessageID->new;
   my $uid = $msg_id->user();
   $heap->{smtpd}->send_to_client( $id, "250 $uid Message accepted for delivery" );

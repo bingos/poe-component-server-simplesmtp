@@ -15,7 +15,7 @@ use Socket;
 use Storable;
 use vars qw($VERSION);
 
-$VERSION = '1.38';
+$VERSION = '1.40';
 
 sub spawn {
   my $package = shift;
@@ -298,7 +298,6 @@ sub _conn_input {
 	$self->{buffers}->{ $wheel_id }->{shutdown} = 1;
 	return;
     }
-    $input =~ s/^\.\.$/./;
     if ( ref( $self->{clients}->{ $id }->{buffer} ) eq 'ARRAY' ) {
     	push @{ $self->{clients}->{ $id }->{buffer} }, $input;
     }
