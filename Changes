@@ -1,4 +1,14 @@
 ========================
+2009-01-05 17:10:49 1.40
+========================
+
+  2009-01-05 17:09:52 (r71) by bingos
+  t/90_transparent.t M; Changes M; lib/POE/Component/Server/SimpleSMTP.pm
+  M
+
+    Fixed a problem with transparency pointed out by Kirill Miazine
+
+========================
 2009-01-05 10:37:30 1.38
 ========================
 

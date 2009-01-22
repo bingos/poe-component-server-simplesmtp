@@ -15,7 +15,7 @@ use Socket;
 use Storable;
 use vars qw($VERSION);
 
-$VERSION = '1.40';
+$VERSION = '1.42';
 
 sub spawn {
   my $package = shift;
@@ -238,8 +238,8 @@ sub _start_listener {
 
 sub _accept_client {
   my ($kernel,$self,$socket,$peeraddr,$peerport) = @_[KERNEL,OBJECT,ARG0..ARG2];
-  my $sockaddr = inet_ntoa( ( unpack_sockaddr_in ( CORE::getsockname $socket ) )[1] );
-  my $sockport = ( unpack_sockaddr_in ( CORE::getsockname $socket ) )[0];
+  my $sockaddr = eval "inet_ntoa( ( unpack_sockaddr_in ( CORE::getsockname $socket ) )[1] )";
+  my $sockport = eval "( unpack_sockaddr_in ( CORE::getsockname $socket ) )[0]";
   $peeraddr = inet_ntoa( $peeraddr );
 
   my $wheel = POE::Wheel::ReadWrite->new(
