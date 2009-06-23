@@ -1121,7 +1121,7 @@ Generated whenever a mail message is queued.
   ARG4 is the number of lines of the message;
   ARG5 is the subject line of the message, if applicable
 
-=item smtpd_send_success
+=item C<smtpd_send_success>
 
 Generated whenever a mail message is successfully delivered.
 
