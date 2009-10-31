@@ -15,7 +15,7 @@ use Socket;
 use Storable;
 use vars qw($VERSION);
 
-$VERSION = '1.42';
+$VERSION = '1.44';
 
 sub spawn {
   my $package = shift;
@@ -29,6 +29,7 @@ sub spawn {
   $opts{handle_connects} = 1 unless defined $opts{handle_connects} and !$opts{handle_connects};
   $opts{hostname} = 'localhost' unless defined $opts{hostname};
   $opts{relay} = 0 unless $opts{relay};
+  $opts{origin} = 0 unless $opts{origin};
   $opts{maxrelay} = 5 unless $opts{maxrelay};
   $opts{relay_auth} = 'PLAIN' if $opts{relay_auth};
   $opts{version} = join('-', __PACKAGE__, $VERSION ) unless $opts{version};
@@ -820,10 +821,12 @@ sub SMTPD_message {
   my $msg_id = Email::MessageID->new( host => $self->{hostname} );
   my $uid = $msg_id->user();
   unshift @{ $buf }, "Message-ID: " . $msg_id->in_brackets()
-	unless grep { /^Message-ID:/i } @{ $buf };
-  unshift @{ $buf }, "Received: from Unknown [" . $self->{clients}->{ $id }->{peeraddr} . "] by " . $self->{hostname} . " " . __PACKAGE__ . "-$VERSION with SMTP id $uid; " . strftime("%a, %d %b %Y %H:%M:%S %z", localtime); 
+	  unless grep { /^Message-ID:/i } @{ $buf };
+  unshift @{ $buf }, "Received: from Unknown [" . $self->{clients}->{ $id }->{peeraddr} . "] by " . $self->{hostname} . " " . __PACKAGE__ . "-$VERSION with SMTP id $uid; " . strftime("%a, %d %b %Y %H:%M:%S %z", localtime)
+    unless $self->{origin};
   $self->send_to_client( $id, "250 $uid Message accepted for delivery" );
   my $email = Email::Simple->new( join "\r\n", @{ $buf } );
+  $email->header_set('Received') if $self->{origin};
   my $subject = $email->header('Subject') || '';
   push @{ $self->{_mail_queue} }, { uid => $uid, from => $from, rcpt => $rcpt, msg => $email->as_string, ts => time(), subject => $subject };
   $poe_kernel->post( $self->{session_id}, '_process_queue' );
@@ -892,6 +895,7 @@ Takes a number of optional arguments:
   'time_out', alter the timeout period when sending emails, default 300 seconds;
   'maxrelay', maximum number of concurrent outgoing emails, defaults to 5;
   'domains', an arrayref of domain/hostnames that we will accept mail for;
+  'origin', set to a true value to enable the stripping of Received headers;
 
 These optional arguments can be used to enable your own SMTP handling:
 

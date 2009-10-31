@@ -25,6 +25,6 @@ requires 'POE::Filter::Transparent::SMTP' => 0;
 requires 'POE::Component::Client::SMTP' => 0.18;
 requires 'POE::Component::Client::DNS' => 0.99;
 requires 'POE::Component::Client::DNSBL' => 0.08;
-makemaker_args(dist => { PREOP => "$^X ./tools/svn-log.perl > ./Changes" });
+makemaker_args(dist => { PREOP => "$^X ./tools/git-log.pl > ./Changes" });
 clean_files 'message';
 WriteAll();

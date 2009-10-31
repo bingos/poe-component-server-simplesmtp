@@ -24,9 +24,10 @@ t/40_data_fh.t
 t/50_handler.t
 t/55_domains.t
 t/60_messageid.t
+t/61_origin.t
 t/70_pause.t
 t/80_cancel.t
 t/90_transparent.t
 t/99_pod.t
 t/99_pod_coverage.t
-tools/svn-log.perl
+tools/git-log.pl
