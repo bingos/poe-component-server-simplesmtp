@@ -1,5 +1,7 @@
 package POE::Component::Server::SimpleSMTP;
 
+#ABSTRACT: A simple to use POE SMTP Server.
+
 use strict;
 use warnings;
 use POSIX;
@@ -13,9 +15,6 @@ use Email::Address;
 use Carp;
 use Socket;
 use Storable;
-use vars qw($VERSION);
-
-$VERSION = '1.44';
 
 sub spawn {
   my $package = shift;
@@ -836,11 +835,8 @@ sub SMTPD_message {
 }
 
 1;
-__END__
 
-=head1 NAME
-
-POE::Component::Server::SimpleSMTP - A simple to use POE SMTP Server.
+=pod
 
 =head1 SYNOPSIS
 
@@ -1370,16 +1366,6 @@ George Nistoric for L<POE::Component::Client::SMTP> and L<POE::Filter::Transpare
 
 Rocco Caputo for L<POE::Component::Client::DNS>
 
-=head1 AUTHOR
-
-Chris C<BinGOs> Williams <chris@bingosnet.co.uk>
-
-=head1 LICENSE
-
-Copyright E<copy> Chris Williams.
-
-This module may be used, modified, and distributed under the same terms as Perl itself. Please see the license that came with your Perl distribution for details.
-
 =head1 SEE ALSO
 
 L<POE::Component::Pluggable>
@@ -1389,3 +1375,5 @@ L<POE::Component::Client::DNS>
 L<POE::Component::Client::SMTP>
 
 RFC 2821 L<http://www.faqs.org/rfcs/rfc2821.html>
+
+=cut
