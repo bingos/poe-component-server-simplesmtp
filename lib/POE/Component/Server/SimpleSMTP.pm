@@ -31,7 +31,7 @@ sub spawn {
   $opts{origin} = 0 unless $opts{origin};
   $opts{maxrelay} = 5 unless $opts{maxrelay};
   $opts{relay_auth} = 'PLAIN' if $opts{relay_auth};
-  $opts{version} = join('-', __PACKAGE__, $VERSION ) unless $opts{version};
+  $opts{version} = join('-', __PACKAGE__, $POE::Component::Server::SimpleSMTP::VERSION ) unless $opts{version};
   my $self = bless \%opts, $package;
   $self->_pluggable_init( prefix => 'smtpd_', types => [ 'SMTPD', 'SMTPC' ], debug => 1 );
   $self->{session_id} = POE::Session->create(
@@ -821,7 +821,7 @@ sub SMTPD_message {
   my $uid = $msg_id->user();
   unshift @{ $buf }, "Message-ID: " . $msg_id->in_brackets()
 	  unless grep { /^Message-ID:/i } @{ $buf };
-  unshift @{ $buf }, "Received: from Unknown [" . $self->{clients}->{ $id }->{peeraddr} . "] by " . $self->{hostname} . " " . __PACKAGE__ . "-$VERSION with SMTP id $uid; " . strftime("%a, %d %b %Y %H:%M:%S %z", localtime)
+  unshift @{ $buf }, "Received: from Unknown [" . $self->{clients}->{ $id }->{peeraddr} . "] by " . $self->{hostname} . " " . $self->{version} . " with SMTP id $uid; " . strftime("%a, %d %b %Y %H:%M:%S %z", localtime)
     unless $self->{origin};
   $self->send_to_client( $id, "250 $uid Message accepted for delivery" );
   my $email = Email::Simple->new( join "\r\n", @{ $buf } );
@@ -834,7 +834,47 @@ sub SMTPD_message {
   return PLUGIN_EAT_ALL;
 }
 
+sub enqueue {
+  my $self = shift;
+  my %item;
+  if ( ref $_[0] and ref $_[0] eq 'HASH' ) {
+    %item = %{ $_[0] };
+  }
+  elsif ( ref $_[0] and ref $_[0] eq 'ARRAY' ) {
+    %item = @{ $_[0] };
+  }
+  else {
+    %item = @_;
+  }
+  $item{lc $_} = delete $item{$_} for keys %item;
+  return unless $item{from};
+  return unless $item{msg};
+  return unless $item{rcpt} and ref $item{rcpt} eq 'ARRAY' and scalar @{ $item{rcpt} };
+  $item{ts} = time() unless $item{ts} and $item{ts} =~ /^\d+$/;
+  $item{uid} = Email::MessageID->new( host => $self->{hostname} )->user() unless $item{uid};
+  $item{subject} = '' unless $item{subject};
+  push @{ $self->{_mail_queue} }, \%item;
+  $poe_kernel->post( $self->{session_id}, '_process_queue' );
+  return 1;
+}
+
 1;
+
+=begin Pod::Coverage
+
+  SMTPD_cmd_data
+  SMTPD_cmd_ehlo
+  SMTPD_cmd_expn
+  SMTPD_cmd_helo
+  SMTPD_cmd_mail
+  SMTPD_cmd_noop
+  SMTPD_cmd_rcpt
+  SMTPD_cmd_rset
+  SMTPD_cmd_vrfy
+  SMTPD_connection
+  SMTPD_message
+
+=end Pod::Coverage
 
 =pod
 
@@ -993,6 +1033,17 @@ Takes one mandatory parameter a msg_id to remove from the mail queue.
 
 Takes no arguments, start the socket listener if it has stopped for any reason. Will fail if the listener is
 already erm listening.
+
+=item C<enqueue>
+
+Takes one argument, a C<hashref> with the following keys and values. Enqueues the item and requests that the
+mail queue be processed. Returns undef on failure or 1 on success.
+
+  'from', the email address of the sender (required);
+  'rcpt', an arrayref of the email recipients (required);
+  'msg', string representation of the email headers and body (required);
+  'ts', the unix time representation of the time the email was received (default is now);
+  'uid', the Message-ID (default is to generate one for you);
 
 =back
 
