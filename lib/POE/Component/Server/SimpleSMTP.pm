@@ -41,7 +41,7 @@ sub spawn {
 		      send_to_client => '_send_to_client',
 		      start_listener => '_start_listener',
 	            },
-	   $self => [ qw(_start register unregister _accept_client _accept_failed _conn_input _conn_error _conn_flushed _conn_alarm _send_to_client __send_event _process_queue _smtp_send_relay _smtp_send_mx _smtp_send_success _smtp_send_failure _process_dns_mx _fh_buffer _buffer_error _buffer_flush _dnsbl) ],
+	   $self => [ qw(_start register unregister _accept_client _accept_failed _conn_input _conn_error _conn_flushed _conn_alarm _send_to_client __send_event _process_queue _smtp_send_relay _smtp_send_mx _smtp_send_success _smtp_send_failure _process_dns_mx _fh_buffer _buffer_error _buffer_flush _dnsbl _sender_verify) ],
 	],
 	heap => $self,
 	( ref($options) eq 'HASH' ? ( options => $options ) : () ),
@@ -681,6 +681,16 @@ sub _dnsbl {
   return;
 }
 
+sub _sender_verify {
+  my ($kernel,$self,$data) = @_[KERNEL,OBJECT,ARG0];
+  my $id = delete $data->{context};
+  if ( $data->{error} ) {
+    $self->{clients}->{ $id }->{fverify} = $data->{error};
+    return;
+  }
+  return;
+}
+
 sub SMTPD_cmd_helo {
   my ($self,$smtpd) = splice @_, 0, 2;
   return PLUGIN_EAT_NONE unless $self->{simple};
@@ -712,6 +722,16 @@ sub SMTPD_cmd_mail {
   elsif ( my ($from) = $args =~ /^from:\s*<(.+)>/i ) {
      $response = "250 <$from>... Sender OK";
      $self->{clients}->{ $id }->{mail} = $from;
+     if ( $self->{sender_verify} ) {
+        my $host = Email::Address->new(undef,$from,undef)->host();
+        my $response = $self->{resolver}->resolve(
+	        event   => '_sender_verify',
+	        type    => 'MX',
+	        host    => $host,
+	        context => $id,
+        );
+        $poe_kernel->post( $self->{session_id}, '_sender_verify', $response ) if $response;
+     }
   }
   else {
      $args = '' unless $args;
@@ -729,6 +749,20 @@ sub SMTPD_cmd_rcpt {
   my $response;
   if ( !$self->{clients}->{ $id }->{mail} ) {
      $response = '503 Need MAIL before RCPT';
+  }
+  elsif ( $self->{sender_verify} and defined $self->{clients}->{ $id }->{fverify} ) {
+     my $fverify = uc $self->{clients}->{ $id }->{fverify};
+     if ( $fverify eq 'NXDOMAIN' ) {
+       $response = '550 Sender verify failed';
+     }
+     else {
+       $response = '451 Temporary local problem - please try later';
+     }
+     delete $self->{clients}->{ $id }->{mail};
+     delete $self->{clients}->{ $id }->{rcpt};
+     delete $self->{clients}->{ $id }->{buffer};
+     delete $self->{clients}->{ $id }->{fverify};
+     $self->_send_event( 'smtpd_fverify', $id, $response, $fverify );
   }
   elsif ( my ($to) = $args =~ /^to:\s*<(.+)>/i ) {
      # TODO scan through $self->{domains} and reject as necessary.
@@ -768,6 +802,20 @@ sub SMTPD_cmd_data {
   }
   elsif ( !$self->{clients}->{ $id }->{rcpt} ) {
      $response = '503 Need RCPT (recipient)';
+  }
+  elsif ( $self->{sender_verify} and defined $self->{clients}->{ $id }->{fverify} ) {
+     my $fverify = uc $self->{clients}->{ $id }->{fverify};
+     if ( $fverify eq 'NXDOMAIN' ) {
+       $response = '550 Sender verify failed';
+     }
+     else {
+       $response = '451 Temporary local problem - please try later';
+     }
+     delete $self->{clients}->{ $id }->{mail};
+     delete $self->{clients}->{ $id }->{rcpt};
+     delete $self->{clients}->{ $id }->{buffer};
+     delete $self->{clients}->{ $id }->{fverify};
+     $self->_send_event( 'smtpd_fverify', $id, $response, $fverify );
   }
   else {
      $response = '354 Enter mail, end with "." on a line by itself';
@@ -952,12 +1000,18 @@ handler, it is removed from the process queue and dispatched instead to indicate
 
 You may also enable DNSBL lookups of connecting clients with the following options:
 
-  'dnsbl_enable', set to a true value to enable DNSBL suuport;
+  'dnsbl_enable', set to a true value to enable DNSBL support;
   'dnsbl', set to a DNSBL to query, default is zen.spamhaus.org;
 
 DNSBL support uses L<POE::Component::Client::DNSBL> to make blacklist queries for each 
 connecting client. If a client is found in the blacklist, any further interaction with the
 client is denied.
+
+You may also enable sender verification, this does a simple C<MX> DNS lookup on the domain of
+the email sender. If there is no C<MX> domain record (ie. an C<NXDOMAIN>) then a C<550> is issued.
+In the case of a C<SERVFAIL>, a C<451> is issued. In both cases the email transaction is cancelled.
+
+  'sender_verify', set to a true value to enable sender verification;
 
 See OUTPUT EVENTS below for information on what a handler event contains.
 
@@ -1154,6 +1208,14 @@ Generated when a DNSBL lookup is completed, in C<simple> mode.
     'reason', if an address is blacklisted, this may contain the reason;
     'error', if something goes wrong with the DNS lookup the error string will be contained here;
     'dnsbl', the DNSBL that was used for this request;
+
+=item C<smtpd_fverify>
+
+Generated when a sender verification fails, in C<simple> mode.
+
+  ARG0 will be the client ID;
+  ARG1 will be the response sent to the client;
+  ARG2 will be the DNS error reason;
 
 =back
 
