@@ -683,11 +683,9 @@ sub _dnsbl {
 
 sub _sender_verify {
   my ($kernel,$self,$data) = @_[KERNEL,OBJECT,ARG0];
+  return if $data->{error} and $data->{error} eq 'NOERROR';
   my $id = delete $data->{context};
-  if ( $data->{error} ) {
-    $self->{clients}->{ $id }->{fverify} = $data->{error};
-    return;
-  }
+  $self->{clients}->{ $id }->{fverify} = $data->{error};
   return;
 }
 
